@@ -31,7 +31,7 @@ fi
 python -m venv venv || { echo "Failed to create venv"; exit 1; }
 
 # Activate the virtual environment
-source venv/bin/activate || { echo "Failed to activate venv"; exit 1; }
+source venv/Scripts/activate || { echo "Failed to activate venv"; exit 1; }
 
 # Prompt for cache usage
 USE_CACHE="--no-cache"

@@ -2,8 +2,8 @@
 gatherUsageStats = false
 
 [theme]
-primaryColor="#f05252"
-backgroundColor="#111111"
-secondaryBackgroundColor="#222222"
-textColor="#dddddd"
-base = "dark"
+primaryColor="#df6263"  # Genpact coral
+backgroundColor="#ffffff"  # White background
+secondaryBackgroundColor="#4aabca"   
+textColor="#1e345c"  # Genpact Blue
+base = "light"

@@ -16,6 +16,9 @@ def load_secrets_fron_env():
             "LMSTUDIO_API_BASE": os.getenv("LMSTUDIO_API_BASE"),
             "ANTHROPIC_API_KEY": os.getenv("ANTHROPIC_API_KEY"),
             "OLLAMA_HOST": os.getenv("OLLAMA_HOST"),
+            "AZURE_OPENAI_API_KEY" : os.getenv("AZURE_OPENAI_API_KEY"),
+            "AZURE_OPENAI_API_BASE" : os.getenv("AZURE_OPENAI_API_BASE"),
+            "AZURE_OPENAI_API_VERSION" : os.getenv("AZURE_OPENAI_API_VERSION")
         }
     else:
         st.session_state.env_vars = st.session_state.env_vars
@@ -103,6 +106,21 @@ def create_lmstudio_llm(model, temperature):
         )
     else:
         raise ValueError("LM Studio API base not set in .env file")
+    
+def create_azure_openai_llm(model, temperature):
+    switch_environment({
+        "AZURE_OPENAI_API_KEY": st.session_state.env_vars["AZURE_OPENAI_API_KEY"],
+        "AZURE_OPENAI_API_BASE": st.session_state.env_vars["AZURE_OPENAI_API_BASE"],
+        "AZURE_OPENAI_API_VERSION": st.session_state.env_vars["AZURE_OPENAI_API_VERSION"],
+    })
+    api_key = os.getenv("AZURE_OPENAI_API_KEY")
+    api_base = os.getenv("AZURE_OPENAI_API_BASE")
+    api_version = os.getenv("AZURE_OPENAI_API_VERSION")
+
+    if api_key and api_base and api_version:
+        return LLM(model=model, temperature=temperature, api_base=api_base, api_version=api_version, api_key=api_key)
+    else:
+        raise ValueError("Azure OpenAI API key, base, or version not set in .env file")
 
 LLM_CONFIG = {
     "OpenAI": {
@@ -124,6 +142,10 @@ LLM_CONFIG = {
     "LM Studio": {
         "models": ["lms-default"],
         "create_llm": create_lmstudio_llm,
+    },
+    "AzureOpenAI": {
+        "models": os.getenv("AZURE_OPENAI_MODELS", "").split(",") if os.getenv("AZURE_OPENAI_MODELS") else ["azure/gpt-4o-mini", "azure/gpt-3.5-turbo"],
+        "create_llm": create_azure_openai_llm,
     },
 }
 
