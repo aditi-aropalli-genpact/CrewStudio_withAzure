@@ -9,30 +9,102 @@ from pg_crew_run import PageCrewRun
 from pg_export_crew import PageExportCrew
 from pg_results import PageResults
 from dotenv import load_dotenv
-from llms import load_secrets_fron_env
 import os
+from urllib.parse import urlencode
+# Okta
+import streamlit as st
+import requests
+import os
+from urllib.parse import urlencode, urlparse, parse_qs
+from dotenv import load_dotenv
 
-#okta
-from okta.client import Client as OktaClient
-from okta.models.authorization_server import AuthorizationServer
+load_dotenv()
 
-# org_url = os.environ.get("OKTA_ORG_URL")
-# client_id = os.environ.get("OKTA_CLIENT_ID")
-# redirect_uri = os.environ.get("OKTA_REDIRECT_URI")  # e.g., "http://localhost:8501/callback"
-# authorization_server_id = os.environ.get("OKTA_AUTHORIZATION_SERVER_ID")
+CLIENT_ID = os.getenv("OKTA_CLIENT_ID")
+ISSUER = os.getenv("OKTA_ISSUER")
+REDIRECT_URI = os.getenv("OKTA_REDIRECT_URI")
+AUTHORIZATION_SERVER_ID = os.getenv("OKTA_AUTHORIZATION_SERVER_ID")
+TOKEN_URL = f"{ISSUER}/oauth2/v1/token"
+AUTH_URL = "https://genpact.oktapreview.com/oauth2/default/v1/authorize"
 
-# config = {
-#     'orgUrl': org_url,
-#     'clientId': client_id,
-#     'authorizationServerId': authorization_server_id
-# }
-# okta_client = OktaClient(config)
+import hashlib
+import base64
+import secrets
+from urllib.parse import urlencode
 
-# if "access_token" not in st.session_state:
-#     st.session_state.access_token = None
-# if "user_info" not in st.session_state:
-#     st.session_state.user_info = None
+def generate_pkce_pair():
+    code_verifier = secrets.token_urlsafe(64)  
+    code_challenge = base64.urlsafe_b64encode(
+        hashlib.sha256(code_verifier.encode()).digest()
+    ).decode().rstrip("=")  
+    return code_verifier, code_challenge
 
+# Ensure PKCE values are stored in session
+if "code_verifier" not in ss:
+    ss.code_verifier, ss.code_challenge = generate_pkce_pair()
+
+def get_auth_url():
+    params = {
+        "client_id": CLIENT_ID,
+        "response_type": "code",
+        "scope": "openid profile email",
+        "redirect_uri": REDIRECT_URI,
+        "state": "random_state_123",
+        "nonce": "random_nonce_456",
+        "code_challenge": ss.code_challenge,
+        "code_challenge_method": "S256"
+    }
+    return f"{AUTH_URL}?{urlencode(params)}"
+
+
+# Redirect to Okta for OAuth
+def exchange_code_for_token(auth_code):
+    TOKEN_URL = "https://genpact.oktapreview.com/oauth2/default/v1/token"
+
+    data = {
+        "grant_type": "authorization_code",
+        "code": auth_code,
+        "redirect_uri": "http://localhost:4200/home",  # Must match Okta settings
+        "client_id": "0oa5vunv7xo0hZTuc0x7",
+        "code_verifier": ss.code_verifier,  # Required for PKCE
+    }
+
+    headers = {
+        "Content-Type": "application/x-www-form-urlencoded"
+    }
+
+    print("🚀 Sending token request to Okta...")
+    print("Request data:", data)
+
+    response = requests.post(TOKEN_URL, data=data, headers=headers)
+
+    print("🔄 Response status:", response.status_code)
+    print("📜 Response body:", response.text)  # Check for error messages
+
+    if response.status_code == 200:
+        return response.json().get("access_token")
+    
+    return None
+
+
+
+def authenticate():
+    query_params = st.query_params
+    auth_code = query_params.get("code", [None])[0]
+    
+    if auth_code and "access_token" not in st.session_state:
+        access_token = exchange_code_for_token(auth_code)
+        if access_token:
+            st.session_state["access_token"] = access_token
+            st.session_state["logged_in"] = True
+            st.rerun()
+        else:
+            st.error("Authentication failed. Please try again.")
+    
+    if "logged_in" not in st.session_state or not st.session_state["logged_in"]:
+        st.write(f"[Click here to login with SSO]({get_auth_url()})")
+        st.stop()
+            
 def pages():
     return {
         'Crews': PageCrews(),
@@ -66,8 +138,17 @@ def draw_sidebar():
             
 def main():
     st.set_page_config(page_title="CrewAI Studio", page_icon="img/favicon.ico", layout="wide")
+
+    # Ensure Streamlit starts at /home
+    if "path" not in st.query_params or st.query_params["path"] != "home":
+        st.query_params["path"] = "home"  # Set the path to home
+        st.rerun()   # Force reload to apply the change
+
+    authenticate()
+    st.set_page_config(page_title="CrewAI Studio", page_icon="img/favicon.ico", layout="wide")
+    st.write("Welcome to CrewAI Studio! You are logged in.")
+    st.set_page_config(page_title="CrewAI Studio", page_icon="img/favicon.ico", layout="wide")
     load_dotenv()
-    load_secrets_fron_env()
     if (str(os.getenv('AGENTOPS_ENABLED')).lower() in ['true', '1']) and not ss.get('agentops_failed', False):
         try:
             import agentops
@@ -83,4 +164,4 @@ def main():
     pages()[ss.page].draw()
     
 if __name__ == '__main__':
-    main() #4200 to be used
+    main()
