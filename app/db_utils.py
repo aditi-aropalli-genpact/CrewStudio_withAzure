@@ -4,9 +4,13 @@ import json
 from my_tools import TOOL_CLASSES
 from sqlalchemy import create_engine, text
 
+user_id = 'Test'
+# user_id = 'Test1'
+
 # If you have an environment variable DB_URL for Postgres, use that. 
 # Otherwise, fallback to local SQLite file: 'sqlite:///crewai.db'
-DEFAULT_SQLITE_URL = 'sqlite:///crewai.db'
+# DEFAULT_SQLITE_URL = 'sqlite:///crewai.db'
+DEFAULT_SQLITE_URL = 'sqlite:///crewai2.db'
 DB_URL = os.getenv('DB_URL', DEFAULT_SQLITE_URL)
 
 # Create a SQLAlchemy Engine.
@@ -29,7 +33,9 @@ def create_tables():
         CREATE TABLE IF NOT EXISTS entities (
             id TEXT PRIMARY KEY,
             entity_type TEXT,
-            data TEXT
+            data TEXT,
+            user_id TEXT,
+            published BOOLEAN DEFAULT FALSE
         )
     ''')
     with get_db_connection() as conn:
@@ -42,17 +48,22 @@ def initialize_db():
     """
     create_tables()
 
+def drop_entities_table():
+    drop_sql = text('DROP TABLE IF EXISTS entities')
+    with get_db_connection() as conn:
+        conn.execute(drop_sql)
+        conn.commit()
 
-def save_entity(entity_type, entity_id, data):
-    # For SQLite ≥ 3.24 and for Postgres, we can do:
-    #   INSERT ... ON CONFLICT(id) DO UPDATE ...
-    # to emulate "INSERT OR REPLACE"
+
+def save_entity(entity_type, entity_id, data, user_id, published=False):
     upsert_sql = text('''
-        INSERT INTO entities (id, entity_type, data)
-        VALUES (:id, :etype, :data)
+        INSERT INTO entities (id, entity_type, data, user_id, published)
+        VALUES (:id, :etype, :data, :user_id, :published)
         ON CONFLICT(id) DO UPDATE
             SET entity_type = EXCLUDED.entity_type,
-                data = EXCLUDED.data
+                data = EXCLUDED.data,
+                user_id = EXCLUDED.user_id,
+                published = EXCLUDED.published
     ''')
     with get_db_connection() as conn:
         conn.execute(
@@ -61,35 +72,62 @@ def save_entity(entity_type, entity_id, data):
                 "id": entity_id,
                 "etype": entity_type,
                 "data": json.dumps(data),
+                "user_id": user_id,
+                "published": published
             }
         )
         conn.commit()
 
-def load_entities(entity_type):
+def load_entities(entity_type, user_id=None, include_published=True):
     query = text('SELECT id, data FROM entities WHERE entity_type = :etype')
+    params = {"etype": entity_type}
+
+    if user_id:
+        query = text('SELECT id, data FROM entities WHERE entity_type = :etype AND (user_id = :user_id OR published = TRUE)')
+        params["user_id"] = user_id
+    elif not include_published:
+        query = text('SELECT id, data FROM entities WHERE entity_type = :etype AND published = FALSE')
+
     with get_db_connection() as conn:
-        result = conn.execute(query, {"etype": entity_type})
-        # result.mappings() gives us rows as dicts (if using SQLAlchemy 1.4+)
+        result = conn.execute(query, params)
         rows = result.mappings().all()
     return [(row["id"], json.loads(row["data"])) for row in rows]
 
-def delete_entity(entity_type, entity_id):
+def delete_entity(entity_type, entity_id, user_id):
     delete_sql = text('''
         DELETE FROM entities
-        WHERE id = :id AND entity_type = :etype
+        WHERE id = :id AND entity_type = :etype AND user_id = :user_id
     ''')
     with get_db_connection() as conn:
-        conn.execute(delete_sql, {"id": entity_id, "etype": entity_type})
+        conn.execute(delete_sql, {"id": entity_id, "etype": entity_type, "user_id": user_id})
+        conn.commit()
+
+def publish_entity(entity_type, entity_id, user_id):
+    update_sql = text('''
+        UPDATE entities
+        SET published = TRUE
+        WHERE id = :id AND entity_type = :etype AND user_id = :user_id
+    ''')
+    with get_db_connection() as conn:
+        conn.execute(update_sql, {"id": entity_id, "etype": entity_type, "user_id": user_id})
         conn.commit()
 
 def save_tools_state(enabled_tools):
     data = {
         'enabled_tools': enabled_tools
     }
-    save_entity('tools_state', 'enabled_tools', data)
+
+    save_entity('tools_state', 'enabled_tools', data, user_id)
+
+# def publish_tools_state(enabled_tools):
+#     data = {
+#         'enabled_tools': enabled_tools
+#     }
+
+#     save_entity('tools_state', 'enabled_tools', data, user_id)
 
 def load_tools_state():
-    rows = load_entities('tools_state')
+    rows = load_entities('tools_state', user_id)
     if rows:
         return rows[0][1].get('enabled_tools', {})
     return {}
@@ -108,11 +146,11 @@ def save_agent(agent):
         'max_iter': agent.max_iter,
         'tool_ids': [tool.tool_id for tool in agent.tools]  # Save tool IDs
     }
-    save_entity('agent', agent.id, data)
+    save_entity('agent', agent.id, data, user_id)
 
 def load_agents():
     from my_agent import MyAgent
-    rows = load_entities('agent')
+    rows = load_entities('agent', user_id)
     tools_dict = {tool.tool_id: tool for tool in load_tools()}
     agents = []
     for row in rows:
@@ -136,11 +174,11 @@ def save_task(task):
         'context_from_sync_tasks_ids': task.context_from_sync_tasks_ids,
         'created_at': task.created_at
     }
-    save_entity('task', task.id, data)
+    save_entity('task', task.id, data, user_id)
 
 def load_tasks():
     from my_task import MyTask
-    rows = load_entities('task')
+    rows = load_entities('task', user_id)
     agents_dict = {agent.id: agent for agent in load_agents()}
     tasks = []
     for row in rows:
@@ -168,11 +206,11 @@ def save_crew(crew):
         'manager_agent_id': crew.manager_agent.id if crew.manager_agent else None,
         'created_at': crew.created_at
     }
-    save_entity('crew', crew.id, data)
+    save_entity('crew', crew.id, data, user_id)
 
 def load_crews():
     from my_crew import MyCrew
-    rows = load_entities('crew')
+    rows = load_entities('crew', user_id)
     agents_dict = {agent.id: agent for agent in load_agents()}
     tasks_dict = {task.id: task for task in load_tasks()}
     crews = []
@@ -205,10 +243,10 @@ def save_tool(tool):
         'description': tool.description,
         'parameters': tool.get_parameters()
     }
-    save_entity('tool', tool.tool_id, data)
+    save_entity('tool', tool.tool_id, data, user_id)
 
 def load_tools():
-    rows = load_entities('tool')
+    rows = load_entities('tool', user_id)
     tools = []
     for row in rows:
         data = row[1]
@@ -276,12 +314,12 @@ def save_result(result):
         'result': result.result,
         'created_at': result.created_at
     }
-    save_entity('result', result.id, data)
+    save_entity('result', result.id, data, user_id)
 
 def load_results():
     """Load all results from the database."""
     from result import Result
-    rows = load_entities('result')
+    rows = load_entities('result', user_id)
     results = []
     for row in rows:
         data = row[1]
