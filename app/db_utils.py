@@ -93,13 +93,13 @@ def load_entities(entity_type, user_id=None, include_published=True):
         rows = result.mappings().all()
     return [(row["id"], json.loads(row["data"])) for row in rows]
 
-def delete_entity(entity_type, entity_id, user_id):
+def delete_entity(entity_type, entity_id):
     delete_sql = text('''
         DELETE FROM entities
-        WHERE id = :id AND entity_type = :etype AND user_id = :user_id
+        WHERE id = :id AND entity_type = :etype
     ''')
     with get_db_connection() as conn:
-        conn.execute(delete_sql, {"id": entity_id, "etype": entity_type, "user_id": user_id})
+        conn.execute(delete_sql, {"id": entity_id, "etype": entity_type})
         conn.commit()
 
 def publish_entity(entity_type, entity_id, user_id):
@@ -165,14 +165,7 @@ def delete_agent(agent_id):
     delete_entity('agent', agent_id)
 
 def publish_agent(agent_id):
-    update_sql = text('''
-        UPDATE entities
-        SET published = TRUE
-        WHERE id = :id AND entity_type = 'agent'
-    ''')
-    with get_db_connection() as conn:
-        conn.execute(update_sql, {"id": agent_id})
-        conn.commit()
+    publish_entity('agent', agent_id, user_id)
 
 def save_task(task):
     data = {
@@ -200,6 +193,9 @@ def load_tasks():
 
 def delete_task(task_id):
     delete_entity('task', task_id)
+
+def publish_task(task_id):
+    publish_entity('task', task_id, user_id)
 
 def save_crew(crew):
     data = {
@@ -247,6 +243,9 @@ def load_crews():
 def delete_crew(crew_id):
     delete_entity('crew', crew_id)
 
+def publish_crew(crew_id):
+    publish_entity('crew', crew_id, user_id)
+
 def save_tool(tool):
     data = {
         'name': tool.name,
@@ -268,6 +267,8 @@ def load_tools():
 
 def delete_tool(tool_id):
     delete_entity('tool', tool_id)
+
+
 
 def export_to_json(file_path):
     with get_db_connection() as conn:

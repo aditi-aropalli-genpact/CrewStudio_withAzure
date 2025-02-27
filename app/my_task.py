@@ -2,7 +2,7 @@ from crewai import Task
 import streamlit as st
 from utils import rnd_id, fix_columns_width
 from streamlit import session_state as ss
-from db_utils import save_task, delete_task
+from db_utils import save_task, delete_task, publish_task
 from datetime import datetime
 
 class MyTask:
@@ -43,6 +43,10 @@ class MyTask:
         ss.tasks = [task for task in ss.tasks if task.id != self.id]
         delete_task(self.id)
 
+    def publish(self):
+        ss.tasks = [task for task in ss.tasks if task.id != self.id]
+        publish_task(self.id)
+
     def is_valid(self, show_warning=False):
         if not self.agent:
             if show_warning:
@@ -76,11 +80,14 @@ class MyTask:
                 st.markdown(f"**Async execution:** {self.async_execution}")
                 st.markdown(f"**Context from async tasks:** {', '.join([task.description[:120] for task in ss.tasks if task.id in self.context_from_async_tasks_ids]) if self.context_from_async_tasks_ids else 'None'}")
                 st.markdown(f"**Context from sync tasks:** {', '.join([task.description[:120] for task in ss.tasks if task.id in self.context_from_sync_tasks_ids]) if self.context_from_sync_tasks_ids else 'None'}")
-                col1, col2 = st.columns(2)
+                col1, col2, col3 = st.columns(3)
                 with col1:
                     st.button("Edit", on_click=self.set_editable, args=(True,), key=rnd_id())
                 with col2:
                     st.button("Delete", on_click=self.delete, key=rnd_id())
+                with col3:
+                        st.button("Publish", on_click=self.publish, key=rnd_id())
+                
                 self.is_valid(show_warning=True)
 
     def set_editable(self, edit):

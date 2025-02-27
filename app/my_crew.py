@@ -117,6 +117,10 @@ class MyCrew:
         ss.crews = [crew for crew in ss.crews if crew.id != self.id]
         db_utils.delete_crew(self.id)
 
+    def publish(self):
+        ss.crews = [crew for crew in ss.crews if crew.id != self.id]
+        db_utils.publish_crew(self.id)
+
     def update_name(self):
         self.name = ss[f'name_{self.id}']
         db_utils.save_crew(self)
@@ -250,11 +254,13 @@ class MyCrew:
                         st.markdown(f" **Tools:** {tools_list}")
                         st.markdown(f" **LLM:** {task.agent.llm_provider_model}")
                 if buttons:
-                    col1, col2 = st.columns(2)
+                    col1, col2, col3 = st.columns(3)
                     with col1:                    
                         st.button("Edit", on_click=self.set_editable, key=rnd_id(), args=(True,))
                     with col2:                   
                         st.button("Delete", on_click=self.delete, key=rnd_id())
+                    with col3:
+                        st.button("Publish", on_click=self.publish, key=rnd_id())
                 self.is_valid(show_warning=True)
 
     def set_editable(self, edit):
