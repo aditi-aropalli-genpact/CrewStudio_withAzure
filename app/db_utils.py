@@ -164,6 +164,16 @@ def load_agents():
 def delete_agent(agent_id):
     delete_entity('agent', agent_id)
 
+def publish_agent(agent_id):
+    update_sql = text('''
+        UPDATE entities
+        SET published = TRUE
+        WHERE id = :id AND entity_type = 'agent'
+    ''')
+    with get_db_connection() as conn:
+        conn.execute(update_sql, {"id": agent_id})
+        conn.commit()
+
 def save_task(task):
     data = {
         'description': task.description,
