@@ -1,8 +1,8 @@
 import streamlit as st
-from utils import rnd_id
-from my_tools import TOOL_CLASSES
+from app.utils import rnd_id
+from app.my_tools import TOOL_CLASSES
 from streamlit import session_state as ss
-import db_utils
+from app import db_utils
 
 class PageTools:
     def __init__(self):

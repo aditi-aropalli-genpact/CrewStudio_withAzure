@@ -1,8 +1,8 @@
 from crewai import Task
 import streamlit as st
-from utils import rnd_id, fix_columns_width
+from app.utils import rnd_id, fix_columns_width
 from streamlit import session_state as ss
-from db_utils import save_task, delete_task, publish_task
+from app.db_utils import save_task, delete_task, publish_task
 from datetime import datetime
 
 class MyTask:

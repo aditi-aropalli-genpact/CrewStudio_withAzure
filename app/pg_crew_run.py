@@ -7,9 +7,9 @@ import queue
 import time
 import traceback
 import os
-from console_capture import ConsoleCapture
-from db_utils import load_results, save_result
-from utils import format_result, generate_printable_view, rnd_id
+from app.console_capture import ConsoleCapture
+from app.db_utils import load_results, save_result
+from app.utils import format_result, generate_printable_view, rnd_id
 
 
 class PageCrewRun:

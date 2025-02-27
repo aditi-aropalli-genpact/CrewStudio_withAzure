@@ -1,7 +1,7 @@
 import streamlit as st
 from streamlit import session_state as ss
-from my_agent import MyAgent
-import db_utils
+from app.my_agent import MyAgent
+from app import db_utils
 
 class PageAgents:
     def __init__(self):

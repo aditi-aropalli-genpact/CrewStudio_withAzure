@@ -1,7 +1,7 @@
 import streamlit as st
 from streamlit import session_state as ss
-from my_crew import MyCrew
-import db_utils
+from app.my_crew import MyCrew
+from app import db_utils
 
 class PageCrews:
     def __init__(self):

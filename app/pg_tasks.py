@@ -1,7 +1,7 @@
 import streamlit as st
 from streamlit import session_state as ss
-from my_task import MyTask
-import db_utils
+from app.my_task import MyTask
+from app import db_utils
 
 class PageTasks:
     def __init__(self):

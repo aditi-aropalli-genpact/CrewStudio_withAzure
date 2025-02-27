@@ -1,86 +1,81 @@
-import streamlit as st
-from streamlit import session_state as ss
-import db_utils
-from pg_agents import PageAgents
-from pg_tasks import PageTasks
-from pg_crews import PageCrews
-from pg_tools import PageTools
-from pg_crew_run import PageCrewRun
-from pg_export_crew import PageExportCrew
-from pg_results import PageResults
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from contextlib import asynccontextmanager
+from app import db_utils
+from app.pg_agents import PageAgents
+from app.pg_tasks import PageTasks
+from app.pg_crews import PageCrews
+from app.pg_tools import PageTools
+from app.pg_crew_run import PageCrewRun
+from app.pg_export_crew import PageExportCrew
+from app.pg_results import PageResults
 from dotenv import load_dotenv
-from llms import load_secrets_fron_env
+from app.llms import load_secrets_fron_env
 import os
+from typing import AsyncGenerator
 
-#okta
-from okta.client import Client as OktaClient
-from okta.models.authorization_server import AuthorizationServer
+# Okta Authentication (if needed)
+# Define lifespan as an async generator
+async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
+    db_utils.initialize_db()
+    if str(os.getenv('AGENTOPS_ENABLED')).lower() in ['true', '1']:
+        try:
+            import agentops
+            agentops.init(api_key=os.getenv('AGENTOPS_API_KEY'), auto_start_session=False)
+        except ModuleNotFoundError as e:
+            print(f"Error initializing AgentOps: {str(e)}")
+    yield  # Let FastAPI run the app
 
-# org_url = os.environ.get("OKTA_ORG_URL")
-# client_id = os.environ.get("OKTA_CLIENT_ID")
-# redirect_uri = os.environ.get("OKTA_REDIRECT_URI")  # e.g., "http://localhost:8501/callback"
-# authorization_server_id = os.environ.get("OKTA_AUTHORIZATION_SERVER_ID")
+app = FastAPI(lifespan=lifespan)
 
-# config = {
-#     'orgUrl': org_url,
-#     'clientId': client_id,
-#     'authorizationServerId': authorization_server_id
-# }
-# okta_client = OktaClient(config)
+# CORS Configuration
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Change this to specific domains in production
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-# if "access_token" not in st.session_state:
-#     st.session_state.access_token = None
-# if "user_info" not in st.session_state:
-#     st.session_state.user_info = None
+# Load environment variables
+load_dotenv()
+load_secrets_fron_env()
+
+def get_okta_client():
+    config = {
+        'orgUrl': os.getenv("OKTA_ORG_URL"),
+        'clientId': os.getenv("OKTA_CLIENT_ID"),
+        'authorizationServerId': os.getenv("OKTA_AUTHORIZATION_SERVER_ID")
+    }
+    return OktaClient(config)
 
 def pages():
     return {
-        'Crews': PageCrews(),
-        'Tools': PageTools(),
-        'Agents': PageAgents(),
-        'Tasks': PageTasks(),
-        'Kickoff!': PageCrewRun(),
-        'Results': PageResults(),
-        'Import/export': PageExportCrew()
+        'crews': PageCrews(),
+        'tools': PageTools(),
+        'agents': PageAgents(),
+        'tasks': PageTasks(),
+        'kickoff': PageCrewRun(),
+        'results': PageResults(),
+        'import_export': PageExportCrew()
     }
 
 def load_data():
-    ss.agents = db_utils.load_agents()
-    ss.tasks = db_utils.load_tasks()
-    ss.crews = db_utils.load_crews()
-    ss.tools = db_utils.load_tools()
-    ss.enabled_tools = db_utils.load_tools_state()
+    return {
+        "agents": db_utils.load_agents(),
+        "tasks": db_utils.load_tasks(),
+        "crews": db_utils.load_crews(),
+        "tools": db_utils.load_tools(),
+        "enabled_tools": db_utils.load_tools_state()
+    }
 
+@app.get("/api/data")
+async def get_data():
+    return load_data()
 
-def draw_sidebar():
-    with st.sidebar:
-        st.image("img/crewai_logo.png")
+@app.get("/api/{page}")
+async def get_page_data(page: str):
+    if page not in pages():
+        return {"error": "Page not found"}
+    return {"page": page, "data": load_data()}
 
-        if 'page' not in ss:
-            ss.page = 'Crews'
-        
-        selected_page = st.radio('Page', list(pages().keys()), index=list(pages().keys()).index(ss.page),label_visibility="collapsed")
-        if selected_page != ss.page:
-            ss.page = selected_page
-            st.rerun()
-            
-def main():
-    st.set_page_config(page_title="CrewAI Studio", page_icon="img/favicon.ico", layout="wide")
-    load_dotenv()
-    load_secrets_fron_env()
-    if (str(os.getenv('AGENTOPS_ENABLED')).lower() in ['true', '1']) and not ss.get('agentops_failed', False):
-        try:
-            import agentops
-            agentops.init(api_key=os.getenv('AGENTOPS_API_KEY'),auto_start_session=False)    
-        except ModuleNotFoundError as e:
-            ss.agentops_failed = True
-            print(f"Error initializing AgentOps: {str(e)}")            
-        
-    db_utils.initialize_db()
-    load_data()
-    draw_sidebar()
-    PageCrewRun.maintain_session_state() #this will persist the session state for the crew run page so crew run can be run in a separate thread
-    pages()[ss.page].draw()
-    
-if __name__ == '__main__':
-    main() #4200 to be used

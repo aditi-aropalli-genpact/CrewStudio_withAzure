@@ -1,8 +1,8 @@
 import streamlit as st
 from streamlit import session_state as ss
-from db_utils import delete_result, load_results
+from app.db_utils import delete_result, load_results
 from datetime import datetime
-from utils import rnd_id, format_result, generate_printable_view
+from app.utils import rnd_id, format_result, generate_printable_view
 
 class PageResults:
     def __init__(self):
