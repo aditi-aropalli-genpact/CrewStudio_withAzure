@@ -5,6 +5,7 @@ from app.my_tools import TOOL_CLASSES
 from sqlalchemy import create_engine, text
 
 user_id = 'Test1'
+# "user" "Test1"
 # user_id = 'Test1'
 
 # If you have an environment variable DB_URL for Postgres, use that. 
@@ -78,20 +79,41 @@ def save_entity(entity_type, entity_id, data, user_id, published=False):
         )
         conn.commit()
 
-def load_entities(entity_type, user_id=None, include_published=True):
-    query = text('SELECT id, data FROM entities WHERE entity_type = :etype')
+def load_entities(entity_type, user_id=None, view_mode="mine"):
+    """
+    Load entities from the database based on view_mode.
+    
+    :param entity_type: Type of entity (e.g., 'agent', 'task', etc.).
+    :param user_id: The current user ID.
+    :param view_mode: "mine" to load only user-created entities, 
+                      "published" to load published entities from other users.
+    :return: List of tuples (id, data, creator_id).
+    """
+    query = text('SELECT id, data, user_id FROM entities WHERE entity_type = :etype')
     params = {"etype": entity_type}
 
     if user_id:
-        query = text('SELECT id, data FROM entities WHERE entity_type = :etype AND (user_id = :user_id OR published = TRUE)')
-        params["user_id"] = user_id
-    elif not include_published:
-        query = text('SELECT id, data FROM entities WHERE entity_type = :etype AND published = FALSE')
+        if view_mode == "mine":
+            # Load only entities created by the user
+            query = text('''
+                SELECT id, data, user_id FROM entities 
+                WHERE entity_type = :etype AND user_id = :user_id
+            ''')
+            params["user_id"] = user_id
+        elif view_mode == "published":
+            # Load only published entities that belong to OTHER users
+            query = text('''
+                SELECT id, data, user_id FROM entities 
+                WHERE entity_type = :etype AND published = TRUE AND user_id != :user_id
+            ''')
+            params["user_id"] = user_id  # Ensure the user sees only others' published entities
 
     with get_db_connection() as conn:
         result = conn.execute(query, params)
         rows = result.mappings().all()
-    return [(row["id"], json.loads(row["data"])) for row in rows]
+
+    return [(row["id"], json.loads(row["data"]), row["user_id"]) for row in rows]
+
 
 def delete_entity(entity_type, entity_id):
     delete_sql = text('''
@@ -148,17 +170,23 @@ def save_agent(agent):
     }
     save_entity('agent', agent.id, data, user_id)
 
-def load_agents():
+def load_agents(user_id, view_mode="mine"):
     from app.my_agent import MyAgent
-    rows = load_entities('agent', user_id)
-    tools_dict = {tool.tool_id: tool for tool in load_tools()}
+    rows = load_entities('agent', user_id=user_id, view_mode=view_mode)
+
+    tools_dict = {tool.tool_id: tool for tool in load_tools(user_id)}
     agents = []
+
     for row in rows:
-        data = row[1]
+        agent_id, data, creator_id = row
         tool_ids = data.pop('tool_ids', [])
-        agent = MyAgent(id=row[0], **data)
+
+        agent = MyAgent(id=agent_id, **data)
         agent.tools = [tools_dict[tool_id] for tool_id in tool_ids if tool_id in tools_dict]
+        agent.creator_id = creator_id  # Attach creator info
+
         agents.append(agent)
+
     return sorted(agents, key=lambda x: x.created_at)
 
 def delete_agent(agent_id):
@@ -179,10 +207,10 @@ def save_task(task):
     }
     save_entity('task', task.id, data, user_id)
 
-def load_tasks():
+def load_tasks(user_id):
     from app.my_task import MyTask
     rows = load_entities('task', user_id)
-    agents_dict = {agent.id: agent for agent in load_agents()}
+    agents_dict = {agent.id: agent for agent in load_agents(user_id)}
     tasks = []
     for row in rows:
         data = row[1]
@@ -214,11 +242,11 @@ def save_crew(crew):
     }
     save_entity('crew', crew.id, data, user_id)
 
-def load_crews():
+def load_crews(user_id):
     from app.my_crew import MyCrew
     rows = load_entities('crew', user_id)
-    agents_dict = {agent.id: agent for agent in load_agents()}
-    tasks_dict = {task.id: task for task in load_tasks()}
+    agents_dict = {agent.id: agent for agent in load_agents(user_id)}
+    tasks_dict = {task.id: task for task in load_tasks(user_id)}
     crews = []
     for row in rows:
         data = row[1]
@@ -254,7 +282,7 @@ def save_tool(tool):
     }
     save_entity('tool', tool.tool_id, data, user_id)
 
-def load_tools():
+def load_tools(user_id):
     rows = load_entities('tool', user_id)
     tools = []
     for row in rows:

@@ -60,22 +60,22 @@ def pages():
         'import_export': PageExportCrew()
     }
 
-def load_data():
+def load_data(user_id, view_mode): #mine 
     return {
-        "agents": db_utils.load_agents(),
-        "tasks": db_utils.load_tasks(),
-        "crews": db_utils.load_crews(),
-        "tools": db_utils.load_tools(),
+        "agents": db_utils.load_agents(user_id, view_mode),
+        "tasks": db_utils.load_tasks(user_id),
+        "crews": db_utils.load_crews(user_id),
+        "tools": db_utils.load_tools(user_id),
         "enabled_tools": db_utils.load_tools_state()
     }
 
 @app.get("/api/data")
-async def get_data():
-    return load_data()
+async def get_data(user_id):
+    return load_data(user_id)
 
 @app.get("/api/{page}")
-async def get_page_data(page: str):
+async def get_page_data(page: str, user_id, view_mode):
     if page not in pages():
         return {"error": "Page not found"}
-    return {"page": page, "data": load_data()}
+    return {"page": page, "data": load_data(user_id, view_mode)}
 
