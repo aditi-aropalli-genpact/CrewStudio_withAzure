@@ -62,7 +62,7 @@ def pages():
         'import_export': PageExportCrew()
     }
 
-def load_data(user_id, view_mode): #mine 
+def load_data(user_id, view_mode='published'): #mine 
     return {
         "agents": db_utils.load_agents(user_id, view_mode),
         "tasks": db_utils.load_tasks(user_id),
@@ -77,7 +77,7 @@ async def get_data(user_id):
 
 @app.get("/api/{page}")
 async def get_page_data(page: str, user_id, view_mode,
-                        # token_payload: dict = Depends(verify_token)
+                        token_payload: dict = Depends(verify_token)
                         ):
     if page not in pages():
         return {"error": "Page not found"}
