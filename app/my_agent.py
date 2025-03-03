@@ -2,7 +2,7 @@ from crewai import Agent
 import streamlit as st
 from utils import rnd_id, fix_columns_width
 from streamlit import session_state as ss
-from db_utils import save_agent, delete_agent, publish_agent
+import db_utils
 from llms import llm_providers_and_models, create_llm
 from datetime import datetime
 
@@ -49,11 +49,11 @@ class MyAgent:
 
     def delete(self):
         ss.agents = [agent for agent in ss.agents if agent.id != self.id]
-        delete_agent(self.id)
+        db_utils.delete_agent(self.id)
 
     def publish(self):
         ss.agents = [agent for agent in ss.agents if agent.id != self.id]
-        publish_agent(self.id)
+        db_utils.publish_agent(self.id)
         
 
     def get_tool_display_name(self, tool):
@@ -126,6 +126,6 @@ class MyAgent:
 
     def set_editable(self, edit):
         self.edit = edit
-        save_agent(self)
+        db_utils.save_agent(self)
         if not edit:
             st.rerun()

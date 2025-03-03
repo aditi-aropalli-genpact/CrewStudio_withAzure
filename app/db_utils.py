@@ -3,22 +3,22 @@ import os
 import json
 from my_tools import TOOL_CLASSES
 from sqlalchemy import create_engine, text
-
+ 
 user_id = 'Test'
 # user_id = 'Test1'
-
-# If you have an environment variable DB_URL for Postgres, use that. 
+ 
+# If you have an environment variable DB_URL for Postgres, use that.
 # Otherwise, fallback to local SQLite file: 'sqlite:///crewai.db'
 # DEFAULT_SQLITE_URL = 'sqlite:///crewai.db'
 DEFAULT_SQLITE_URL = 'sqlite:///crewai2.db'
 DB_URL = os.getenv('DB_URL', DEFAULT_SQLITE_URL)
-
+ 
 # Create a SQLAlchemy Engine.
 # For example, DB_URL could be:
 #   "postgresql://username:password@hostname:5432/dbname"
 # or fallback to: "sqlite:///crewai.db"
 engine = create_engine(DB_URL, echo=False)
-
+ 
 def get_db_connection():
     # conn = sqlite3.connect(DB_NAME)
     # conn.row_factory = sqlite3.Row
@@ -27,7 +27,7 @@ def get_db_connection():
     Return a context-managed connection from the SQLAlchemy engine.
     """
     return engine.connect()
-
+ 
 def create_tables():
     create_sql = text('''
         CREATE TABLE IF NOT EXISTS entities (
@@ -41,20 +41,20 @@ def create_tables():
     with get_db_connection() as conn:
         conn.execute(create_sql)
         conn.commit()
-
+ 
 def initialize_db():
     """
     Initialize the database by creating tables if they do not exist.
     """
     create_tables()
-
+ 
 def drop_entities_table():
     drop_sql = text('DROP TABLE IF EXISTS entities')
     with get_db_connection() as conn:
         conn.execute(drop_sql)
         conn.commit()
-
-
+ 
+ 
 def save_entity(entity_type, entity_id, data, user_id, published=False):
     upsert_sql = text('''
         INSERT INTO entities (id, entity_type, data, user_id, published)
@@ -77,22 +77,22 @@ def save_entity(entity_type, entity_id, data, user_id, published=False):
             }
         )
         conn.commit()
-
+ 
 def load_entities(entity_type, user_id=None, include_published=True):
     query = text('SELECT id, data FROM entities WHERE entity_type = :etype')
     params = {"etype": entity_type}
-
+ 
     if user_id:
         query = text('SELECT id, data FROM entities WHERE entity_type = :etype AND (user_id = :user_id OR published = TRUE)')
         params["user_id"] = user_id
     elif not include_published:
         query = text('SELECT id, data FROM entities WHERE entity_type = :etype AND published = FALSE')
-
+ 
     with get_db_connection() as conn:
         result = conn.execute(query, params)
         rows = result.mappings().all()
     return [(row["id"], json.loads(row["data"])) for row in rows]
-
+ 
 def delete_entity(entity_type, entity_id):
     delete_sql = text('''
         DELETE FROM entities
@@ -101,7 +101,7 @@ def delete_entity(entity_type, entity_id):
     with get_db_connection() as conn:
         conn.execute(delete_sql, {"id": entity_id, "etype": entity_type})
         conn.commit()
-
+ 
 def publish_entity(entity_type, entity_id, user_id):
     update_sql = text('''
         UPDATE entities
@@ -111,27 +111,27 @@ def publish_entity(entity_type, entity_id, user_id):
     with get_db_connection() as conn:
         conn.execute(update_sql, {"id": entity_id, "etype": entity_type, "user_id": user_id})
         conn.commit()
-
+ 
 def save_tools_state(enabled_tools):
     data = {
         'enabled_tools': enabled_tools
     }
-
+ 
     save_entity('tools_state', 'enabled_tools', data, user_id)
-
+ 
 # def publish_tools_state(enabled_tools):
 #     data = {
 #         'enabled_tools': enabled_tools
 #     }
-
+ 
 #     save_entity('tools_state', 'enabled_tools', data, user_id)
-
+ 
 def load_tools_state():
     rows = load_entities('tools_state', user_id)
     if rows:
         return rows[0][1].get('enabled_tools', {})
     return {}
-
+ 
 def save_agent(agent):
     data = {
         'created_at': agent.created_at,
@@ -147,7 +147,7 @@ def save_agent(agent):
         'tool_ids': [tool.tool_id for tool in agent.tools]  # Save tool IDs
     }
     save_entity('agent', agent.id, data, user_id)
-
+ 
 def load_agents():
     from my_agent import MyAgent
     rows = load_entities('agent', user_id)
@@ -160,13 +160,13 @@ def load_agents():
         agent.tools = [tools_dict[tool_id] for tool_id in tool_ids if tool_id in tools_dict]
         agents.append(agent)
     return sorted(agents, key=lambda x: x.created_at)
-
+ 
 def delete_agent(agent_id):
     delete_entity('agent', agent_id)
-
+ 
 def publish_agent(agent_id):
     publish_entity('agent', agent_id, user_id)
-
+ 
 def save_task(task):
     data = {
         'description': task.description,
@@ -178,7 +178,7 @@ def save_task(task):
         'created_at': task.created_at
     }
     save_entity('task', task.id, data, user_id)
-
+ 
 def load_tasks():
     from my_task import MyTask
     rows = load_entities('task', user_id)
@@ -190,13 +190,13 @@ def load_tasks():
         task = MyTask(id=row[0], agent=agents_dict.get(agent_id), **data)
         tasks.append(task)
     return sorted(tasks, key=lambda x: x.created_at)
-
+ 
 def delete_task(task_id):
     delete_entity('task', task_id)
-
+ 
 def publish_task(task_id):
     publish_entity('task', task_id, user_id)
-
+ 
 def save_crew(crew):
     data = {
         'name': crew.name,
@@ -213,7 +213,7 @@ def save_crew(crew):
         'created_at': crew.created_at
     }
     save_entity('crew', crew.id, data, user_id)
-
+ 
 def load_crews():
     from my_crew import MyCrew
     rows = load_entities('crew', user_id)
@@ -223,15 +223,15 @@ def load_crews():
     for row in rows:
         data = row[1]
         crew = MyCrew(
-            id=row[0], 
-            name=data['name'], 
-            process=data['process'], 
-            verbose=data['verbose'], 
-            created_at=data['created_at'], 
+            id=row[0],
+            name=data['name'],
+            process=data['process'],
+            verbose=data['verbose'],
+            created_at=data['created_at'],
             memory=data.get('memory'),
             cache=data.get('cache'),
             planning=data.get('planning'),
-            max_rpm=data.get('max_rpm'), 
+            max_rpm=data.get('max_rpm'),
             manager_llm=data.get('manager_llm'),
             manager_agent=agents_dict.get(data.get('manager_agent_id'))
         )
@@ -239,13 +239,13 @@ def load_crews():
         crew.tasks = [tasks_dict[task_id] for task_id in data['task_ids'] if task_id in tasks_dict]
         crews.append(crew)
     return sorted(crews, key=lambda x: x.created_at)
-
+ 
 def delete_crew(crew_id):
     delete_entity('crew', crew_id)
-
+ 
 def publish_crew(crew_id):
     publish_entity('crew', crew_id, user_id)
-
+ 
 def save_tool(tool):
     data = {
         'name': tool.name,
@@ -253,7 +253,7 @@ def save_tool(tool):
         'parameters': tool.get_parameters()
     }
     save_entity('tool', tool.tool_id, data, user_id)
-
+ 
 def load_tools():
     rows = load_entities('tool', user_id)
     tools = []
@@ -264,18 +264,18 @@ def load_tools():
         tool.set_parameters(**data['parameters'])
         tools.append(tool)
     return tools
-
+ 
 def delete_tool(tool_id):
     delete_entity('tool', tool_id)
-
-
-
+ 
+ 
+ 
 def export_to_json(file_path):
     with get_db_connection() as conn:
         # Use SQLAlchemy's text() for raw SQL
         query = text('SELECT * FROM entities')
         result = conn.execute(query)
-        
+       
         # Convert to list of dictionaries
         rows = [
             {
@@ -285,15 +285,15 @@ def export_to_json(file_path):
             }
             for row in result
         ]
-
+ 
         # Write to file
         with open(file_path, 'w') as f:
             json.dump(rows, f, indent=4)
-
+ 
 def import_from_json(file_path):
     with open(file_path, 'r') as f:
         data = json.load(f)
-
+ 
     with get_db_connection() as conn:
         for entity in data:
             # Use SQLAlchemy's text() for raw SQL with parameters
@@ -304,7 +304,7 @@ def import_from_json(file_path):
                     SET entity_type = EXCLUDED.entity_type,
                         data = EXCLUDED.data
             ''')
-            
+           
             conn.execute(
                 upsert_sql,
                 {
@@ -313,9 +313,9 @@ def import_from_json(file_path):
                     "data": json.dumps(entity['data'])
                 }
             )
-            
+           
         conn.commit()
-        
+       
 def save_result(result):
     """Save a result to the database."""
     data = {
@@ -326,7 +326,7 @@ def save_result(result):
         'created_at': result.created_at
     }
     save_entity('result', result.id, data, user_id)
-
+ 
 def load_results():
     """Load all results from the database."""
     from result import Result
@@ -344,7 +344,7 @@ def load_results():
         )
         results.append(result)
     return sorted(results, key=lambda x: x.created_at, reverse=True)
-
+ 
 def delete_result(result_id):
     """Delete a result from the database."""
     delete_entity('result', result_id)
