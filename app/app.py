@@ -13,6 +13,8 @@ from dotenv import load_dotenv
 from app.llms import load_secrets_fron_env
 import os
 from typing import AsyncGenerator
+from app.okta_auth import verify_token, get_current_user
+from fastapi import APIRouter, UploadFile, File, Form, Depends, HTTPException
 
 # Okta Authentication (if needed)
 # Define lifespan as an async generator
@@ -74,7 +76,9 @@ async def get_data(user_id):
     return load_data(user_id)
 
 @app.get("/api/{page}")
-async def get_page_data(page: str, user_id, view_mode):
+async def get_page_data(page: str, user_id, view_mode,
+                        # token_payload: dict = Depends(verify_token)
+                        ):
     if page not in pages():
         return {"error": "Page not found"}
     return {"page": page, "data": load_data(user_id, view_mode)}
