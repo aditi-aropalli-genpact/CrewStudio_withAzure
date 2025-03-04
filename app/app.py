@@ -6,7 +6,7 @@ from app.pg_agents import PageAgents
 from app.pg_tasks import PageTasks
 from app.pg_crews import PageCrews
 from app.pg_tools import PageTools
-from app.pg_crew_run import PageCrewRun
+from app import pg_crew_run 
 from app.pg_export_crew import PageExportCrew
 from app.pg_results import PageResults
 from dotenv import load_dotenv
@@ -41,6 +41,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
 app = FastAPI(lifespan=lifespan)
 
+app.include_router(pg_crew_run.router)
+
 # CORS Configuration
 app.add_middleware(
     CORSMiddleware,
@@ -68,7 +70,7 @@ def pages():
         'tools': PageTools(),
         'agents': PageAgents(),
         'tasks': PageTasks(),
-        'kickoff': PageCrewRun(),
+        # 'kickoff': PageCrewRun(),
         'results': PageResults(),
         'import_export': PageExportCrew()
     }
