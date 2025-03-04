@@ -77,9 +77,10 @@ async def get_data(user_id):
 
 @app.get("/api/{page}")
 async def get_page_data(page: str, user_id, view_mode,
-                        token_payload: dict = Depends(verify_token)
+                        # token_payload: dict = Depends(verify_token)
                         ):
     if page not in pages():
         return {"error": "Page not found"}
     return {"page": page, "data": load_data(user_id, view_mode)}
+
 
