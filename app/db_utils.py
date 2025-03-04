@@ -4,7 +4,7 @@ import json
 from app.my_tools import TOOL_CLASSES
 from sqlalchemy import create_engine, text
 
-user_id = 'Test1'
+# user_id = 'Test1'
 # "user" "Test1"
 # user_id = 'Test1'
 
@@ -168,7 +168,7 @@ def save_agent(agent):
         'max_iter': agent.max_iter,
         'tool_ids': [tool.tool_id for tool in agent.tools]  # Save tool IDs
     }
-    save_entity('agent', agent.id, data, user_id)
+    save_entity('agent', agent.id, data, user_id=agent.creator_id)
 
 def load_agents(user_id, view_mode="mine"):
     from app.my_agent import MyAgent
