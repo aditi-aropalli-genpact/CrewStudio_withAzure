@@ -23,7 +23,10 @@ from app.okta_auth import verify_token
 from app.my_agent import MyAgent  
 from app.db_utils import save_agent, load_tools 
 from typing import Optional   
-  
+
+import streamlit as st
+if 'agents' not in st.session_state:
+    st.session_state.agents = []
 # Create a router for agent-related endpoints  
 agent_router = APIRouter()  
 

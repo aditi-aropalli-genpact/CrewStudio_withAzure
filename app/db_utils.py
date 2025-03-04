@@ -370,6 +370,7 @@ def load_results():
             result=data['result'],
             created_at=data['created_at']
         )
+        print(result)
         results.append(result)
     return sorted(results, key=lambda x: x.created_at, reverse=True)
 
