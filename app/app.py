@@ -21,7 +21,8 @@ from datetime import datetime
 from typing import List  
 from app.okta_auth import verify_token  
 from app.my_agent import MyAgent  
-from app.db_utils import save_agent, load_tools  
+from app.db_utils import save_agent, load_tools 
+from typing import Optional   
   
 # Create a router for agent-related endpoints  
 agent_router = APIRouter()  
@@ -156,3 +157,107 @@ async def create_agent(
   
     # Return the created agent's ID  
     return {'id': agent.id}  
+
+  
+# Endpoint to delete an agent  
+@app.delete('/api/agents/{agent_id}')  
+async def delete_agent(  
+    agent_id: str,  
+    token_payload: dict = Depends(verify_token)  
+):  
+    # Extract user_id from 'OHR' field in the token payload  
+    user_id = token_payload.get('OHR')  
+    if not user_id:  
+        raise HTTPException(status_code=401, detail='User ID not found in token')  
+  
+    # Load agent to ensure it exists and belongs to the user  
+    agents = db_utils.load_agents(user_id)  
+    agent = next((a for a in agents if a.id == agent_id), None)  
+    if not agent:  
+        raise HTTPException(status_code=404, detail='Agent not found')  
+  
+    # Delete the agent  
+    db_utils.delete_agent(agent_id)  
+    return {'detail': 'Agent deleted successfully'}  
+
+
+
+  
+# Define Pydantic model for agent update  
+class AgentUpdate(BaseModel):  
+    role: Optional[str] = None  
+    backstory: Optional[str] = None  
+    goal: Optional[str] = None  
+    temperature: Optional[float] = None  
+    allow_delegation: Optional[bool] = None  
+    verbose: Optional[bool] = None  
+    cache: Optional[bool] = None  
+    llm_provider_model: Optional[str] = None  
+    max_iter: Optional[int] = None  
+    tool_ids: Optional[List[str]] = None  
+  
+# Endpoint to edit an agent  
+@app.put('/api/agents/{agent_id}')  
+async def edit_agent(  
+    agent_id: str,  
+    agent_data: AgentUpdate,  
+    token_payload: dict = Depends(verify_token)  
+):  
+    # Extract user_id from 'OHR' field in the token payload  
+    user_id = token_payload.get('OHR')  
+    if not user_id:  
+        raise HTTPException(status_code=401, detail='User ID not found in token')  
+  
+    # Load agents and find the one to edit  
+    agents = db_utils.load_agents(user_id)  
+    agent = next((a for a in agents if a.id == agent_id), None)  
+  
+    if not agent:  
+        raise HTTPException(status_code=404, detail='Agent not found')  
+  
+    # Update agent fields if provided  
+    update_fields = agent_data.dict(exclude_unset=True)  
+  
+    # If tools are being updated, load and validate them  
+    if 'tool_ids' in update_fields:  
+        tools_list = db_utils.load_tools(user_id)  
+        tools_dict = {tool.tool_id: tool for tool in tools_list}  
+        selected_tools = []  
+        for tool_id in update_fields['tool_ids']:  
+            if tool_id in tools_dict:  
+                selected_tools.append(tools_dict[tool_id])  
+            else:  
+                raise HTTPException(status_code=400, detail=f"Tool with ID '{tool_id}' not found")  
+        agent.tools = selected_tools  
+        del update_fields['tool_ids']  
+  
+    # Update other fields  
+    for field, value in update_fields.items():  
+        setattr(agent, field, value)  
+  
+    # Save the updated agent  
+    db_utils.save_agent(agent)  
+    return {'detail': 'Agent updated successfully'}  
+
+
+# Endpoint to publish an agent  
+@app.patch('/api/agents/{agent_id}/publish')  
+async def publish_agent(  
+    agent_id: str,  
+    token_payload: dict = Depends(verify_token)  
+):  
+    # Extract user_id from 'OHR' field in the token payload  
+    user_id = token_payload.get('OHR')  
+    if not user_id:  
+        raise HTTPException(status_code=401, detail='User ID not found in token')  
+  
+    # Load agents and find the one to publish  
+    agents = db_utils.load_agents(user_id)  
+    agent = next((a for a in agents if a.id == agent_id), None)  
+  
+    if not agent:  
+        raise HTTPException(status_code=404, detail='Agent not found')  
+  
+    # Publish the agent  
+    db_utils.publish_agent(agent_id, user_id)  
+    return {'detail': 'Agent published successfully'}  
