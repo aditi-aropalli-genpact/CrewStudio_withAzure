@@ -22,7 +22,12 @@ from typing import List
 from app.okta_auth import verify_token  
 from app.my_agent import MyAgent  
 from app.db_utils import save_agent, load_tools 
-from typing import Optional   
+from typing import Optional,List
+from app.my_task import MyTask  
+from app.db_utils import save_task, load_tasks, delete_task, publish_task, load_agents  
+from app.utils import generate_task_id  
+
+from app.utils import generate_agent_id   
   
 # Create a router for agent-related endpoints  
 agent_router = APIRouter()  
@@ -84,6 +89,7 @@ def load_data(user_id, view_mode='published'): #mine
 
 @app.get("/api/data")
 async def get_data(user_id):
+    
     return load_data(user_id)
 
 @app.get("/api/{page}")
@@ -120,8 +126,8 @@ async def create_agent(
         raise HTTPException(status_code=401, detail='User ID not found in token')  
   
     # Proceed to create the agent with this user_id  
-    agent_id = 'A_' + str(uuid4())[:8]  
-    created_at = datetime.now().isoformat()  
+    agent_id = generate_agent_id(user_id)  
+    created_at = datetime.now().isoformat() 
   
     # Load tools for the user  
     tools_list = load_tools(user_id)  
@@ -261,3 +267,173 @@ async def publish_agent(
     # Publish the agent  
     db_utils.publish_agent(agent_id, user_id)  
     return {'detail': 'Agent published successfully'}  
+
+  
+class TaskCreate(BaseModel):  
+    description: str  
+    expected_output: str  
+    agent_id: str  
+    async_execution: Optional[bool] = False  
+    context_from_async_tasks_ids: Optional[List[str]] = []  
+    context_from_sync_tasks_ids: Optional[List[str]] = []  
+  
+class TaskUpdate(BaseModel):  
+    description: Optional[str] = None  
+    expected_output: Optional[str] = None  
+    agent_id: Optional[str] = None  
+    async_execution: Optional[bool] = None  
+    context_from_async_tasks_ids: Optional[List[str]] = None  
+    context_from_sync_tasks_ids: Optional[List[str]] = None  
+
+  
+# Endpoint to create a task  
+@app.post('/api/tasks')  
+async def create_task(  
+    task_data: TaskCreate,  
+    token_payload: dict = Depends(verify_token)  
+):  
+    # Extract user_id from token payload  
+    user_id = token_payload.get('OHR')  
+    if not user_id:  
+        raise HTTPException(status_code=401, detail='User ID not found in token')  
+  
+    # Generate unique task_id  
+    task_id = generate_task_id(user_id)  
+    created_at = datetime.now().isoformat()  
+  
+    # Load agents for the user to validate agent_id  
+    agents = load_agents(user_id)  
+    agents_dict = {agent.id: agent for agent in agents}  
+    if task_data.agent_id not in agents_dict:  
+        raise HTTPException(status_code=400, detail=f"Agent with ID '{task_data.agent_id}' not found")  
+  
+    agent = agents_dict[task_data.agent_id]  
+  
+    # Validate context task IDs  
+    tasks = load_tasks(user_id)  
+    tasks_dict = {task.id: task for task in tasks}  
+  
+    context_from_async_tasks_ids = task_data.context_from_async_tasks_ids or []  
+    context_from_sync_tasks_ids = task_data.context_from_sync_tasks_ids or []  
+  
+    for ctxt_task_id in context_from_async_tasks_ids + context_from_sync_tasks_ids:  
+        if ctxt_task_id not in tasks_dict:  
+            raise HTTPException(status_code=400, detail=f"Context task with ID '{ctxt_task_id}' not found")  
+  
+    # Create the task instance  
+    task = MyTask(  
+        id=task_id,  
+        description=task_data.description,  
+        expected_output=task_data.expected_output,  
+        agent=agent,  
+        async_execution=task_data.async_execution,  
+        created_at=created_at,  
+        context_from_async_tasks_ids=context_from_async_tasks_ids,  
+        context_from_sync_tasks_ids=context_from_sync_tasks_ids,  
+        user_id=user_id  
+    )  
+  
+    # Save the task to the database  
+    save_task(task)  
+  
+    # Return the created task's ID  
+    return {'id': task.id}  
+  
+# Endpoint to delete a task  
+@app.delete('/api/tasks/{task_id}')  
+async def delete_task_endpoint(  
+    task_id: str,  
+    token_payload: dict = Depends(verify_token)  
+):  
+    # Extract user_id from token payload  
+    user_id = token_payload.get('OHR')  
+    if not user_id:  
+        raise HTTPException(status_code=401, detail='User ID not found in token')  
+  
+    # Load tasks for the user  
+    tasks = load_tasks(user_id)  
+    task = next((t for t in tasks if t.id == task_id), None)  
+  
+    if not task:  
+        raise HTTPException(status_code=404, detail='Task not found')  
+  
+    # Delete the task  
+    delete_task(task_id)  
+    return {'detail': 'Task deleted successfully'}  
+  
+# Endpoint to update a task  
+@app.put('/api/tasks/{task_id}')  
+async def update_task(  
+    task_id: str,  
+    task_data: TaskUpdate,  
+    token_payload: dict = Depends(verify_token)  
+):  
+    # Extract user_id from token payload  
+    user_id = token_payload.get('OHR')  
+    if not user_id:  
+        raise HTTPException(status_code=401, detail='User ID not found in token')  
+  
+    # Load tasks for the user  
+    tasks = load_tasks(user_id)  
+    task = next((t for t in tasks if t.id == task_id), None)  
+  
+    if not task:  
+        raise HTTPException(status_code=404, detail='Task not found')  
+  
+    # Update task fields  
+    update_fields = task_data.dict(exclude_unset=True)  
+  
+    # Handle agent_id update  
+    if 'agent_id' in update_fields:  
+        agents = load_agents(user_id)  
+        agents_dict = {agent.id: agent for agent in agents}  
+        if update_fields['agent_id'] not in agents_dict:  
+            raise HTTPException(status_code=400, detail=f"Agent with ID '{update_fields['agent_id']}' not found")  
+        task.agent = agents_dict[update_fields['agent_id']]  
+        del update_fields['agent_id']  
+  
+    # Handle context tasks updates  
+    if 'context_from_async_tasks_ids' in update_fields or 'context_from_sync_tasks_ids' in update_fields:  
+        tasks_dict = {t.id: t for t in tasks}  
+        if 'context_from_async_tasks_ids' in update_fields:  
+            for ctxt_task_id in update_fields['context_from_async_tasks_ids']:  
+                if ctxt_task_id not in tasks_dict:  
+                    raise HTTPException(status_code=400, detail=f"Context task with ID '{ctxt_task_id}' not found")  
+            task.context_from_async_tasks_ids = update_fields['context_from_async_tasks_ids']  
+            del update_fields['context_from_async_tasks_ids']  
+        if 'context_from_sync_tasks_ids' in update_fields:  
+            for ctxt_task_id in update_fields['context_from_sync_tasks_ids']:  
+                if ctxt_task_id not in tasks_dict:  
+                    raise HTTPException(status_code=400, detail=f"Context task with ID '{ctxt_task_id}' not found")  
+            task.context_from_sync_tasks_ids = update_fields['context_from_sync_tasks_ids']  
+            del update_fields['context_from_sync_tasks_ids']  
+  
+    # Update other fields  
+    for field, value in update_fields.items():  
+        setattr(task, field, value)  
+  
+    # Save the updated task  
+    save_task(task)  
+    return {'detail': 'Task updated successfully'}  
+  
+# Endpoint to publish a task  
+@app.patch('/api/tasks/{task_id}/publish')  
+async def publish_task_endpoint(  
+    task_id: str,  
+    token_payload: dict = Depends(verify_token)  
+):  
+    # Extract user_id from token payload  
+    user_id = token_payload.get('OHR')  
+    if not user_id:  
+        raise HTTPException(status_code=401, detail='User ID not found in token')  
+  
+    # Load tasks for the user  
+    tasks = load_tasks(user_id)  
+    task = next((t for t in tasks if t.id == task_id), None)  
+  
+    if not task:  
+        raise HTTPException(status_code=404, detail='Task not found')  
+  
+    # Publish the task  
+    publish_task(task_id, user_id)  
+    return {'detail': 'Task published successfully'}  

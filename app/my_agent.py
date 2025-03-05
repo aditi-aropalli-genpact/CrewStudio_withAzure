@@ -1,14 +1,14 @@
 from crewai import Agent
 import streamlit as st
-from app.utils import rnd_id, fix_columns_width
+from app.utils import generate_agent_id, rnd_id, fix_columns_width
 from streamlit import session_state as ss
 from app.db_utils import save_agent, delete_agent, publish_agent
 from app.llms import llm_providers_and_models, create_llm
 from datetime import datetime
 
 class MyAgent:
-    def __init__(self, id=None, role=None, backstory=None, goal=None, temperature=None, allow_delegation=False, verbose=False, cache= None, llm_provider_model=None, max_iter=None, created_at=None, tools=None):
-        self.id = id or "A_" + rnd_id()
+    def __init__(self, id=None, role=None, backstory=None, goal=None, temperature=None, allow_delegation=False, verbose=False, cache= None, llm_provider_model=None, max_iter=None, created_at=None, tools=None, user_id=None):
+        self.id = id or generate_agent_id(user_id)  
         self.role = role or "Senior Researcher"
         self.backstory = backstory or "Driven by curiosity, you're at the forefront of innovation, eager to explore and share knowledge that could change the world."
         self.goal = goal or "Uncover groundbreaking technologies in AI"

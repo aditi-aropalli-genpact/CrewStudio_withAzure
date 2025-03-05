@@ -192,7 +192,7 @@ def load_agents(user_id, view_mode="mine"):
 def delete_agent(agent_id):
     delete_entity('agent', agent_id)
 
-def publish_agent(agent_id):
+def publish_agent(agent_id,user_id):
     publish_entity('agent', agent_id, user_id)
 
 def save_task(task):
@@ -205,25 +205,30 @@ def save_task(task):
         'context_from_sync_tasks_ids': task.context_from_sync_tasks_ids,
         'created_at': task.created_at
     }
-    save_entity('task', task.id, data, user_id)
+    # Use task's agent's creator_id if agent exists, else use a default  
+    user_id = task.agent.creator_id if task.agent else 'unknown_user'  
+    save_entity('task', task.id, data, user_id=user_id)  
 
-def load_tasks(user_id):
-    from app.my_task import MyTask
-    rows = load_entities('task', user_id)
-    agents_dict = {agent.id: agent for agent in load_agents(user_id)}
-    tasks = []
-    for row in rows:
-        data = row[1]
-        agent_id = data.pop('agent_id', None)
-        task = MyTask(id=row[0], agent=agents_dict.get(agent_id), **data)
-        tasks.append(task)
-    return sorted(tasks, key=lambda x: x.created_at)
+
+def load_tasks(user_id, view_mode="mine"):  
+    from app.my_task import MyTask  
+    rows = load_entities('task', user_id=user_id, view_mode=view_mode)  
+    agents = load_agents(user_id)  
+    agents_dict = {agent.id: agent for agent in agents}  
+    tasks = []  
+    for row in rows:  
+        task_id, data, creator_id = row  
+        agent_id = data.pop('agent_id', None)  
+        agent = agents_dict.get(agent_id)  
+        task = MyTask(id=task_id, agent=agent, user_id=creator_id, **data)  
+        tasks.append(task)  
+    return sorted(tasks, key=lambda x: x.created_at) 
 
 def delete_task(task_id):
     delete_entity('task', task_id)
 
-def publish_task(task_id):
-    publish_entity('task', task_id, user_id)
+def publish_task(task_id, user_id):  
+    publish_entity('task', task_id, user_id)  
 
 def save_crew(crew):
     data = {

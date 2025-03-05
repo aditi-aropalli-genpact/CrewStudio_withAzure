@@ -1,13 +1,13 @@
 from crewai import Task
 import streamlit as st
-from app.utils import rnd_id, fix_columns_width
+from app.utils import generate_task_id, rnd_id, fix_columns_width
 from streamlit import session_state as ss
 from app.db_utils import save_task, delete_task, publish_task
 from datetime import datetime
 
 class MyTask:
-    def __init__(self, id=None, description=None, expected_output=None, agent=None, async_execution=None, created_at=None, context_from_async_tasks_ids=None, context_from_sync_tasks_ids=None, **kwargs):
-        self.id = id or "T_" + rnd_id()
+    def __init__(self, id=None, description=None, expected_output=None, agent=None, async_execution=None, created_at=None, context_from_async_tasks_ids=None, context_from_sync_tasks_ids=None,user_id=None, **kwargs):
+        self.id = id or generate_task_id(user_id) 
         self.description = description or "Identify the next big trend in AI. Focus on identifying pros and cons and the overall narrative."
         self.expected_output = expected_output or "A comprehensive 3 paragraphs long report on the latest AI trends."
         self.agent = agent or ss.agents[0] if ss.agents else None
