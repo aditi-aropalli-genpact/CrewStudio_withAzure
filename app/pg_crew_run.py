@@ -152,21 +152,41 @@ class PageCrewRun:
 
 crew_run = PageCrewRun()
 
+from pydantic import BaseModel
+
+class RunCrewRequest(BaseModel):
+    crew_name: str
+
+
 @router.post("/run_crew")
-def api_run_crew(crew_name: str):
-    selected_crew = load_crew_by_name(crew_name)
-    if not selected_crew:
-        raise HTTPException(status_code=404, detail="Crew not found")
+def api_run_crew(request: RunCrewRequest):
+    selected_crew = request.crew_name
+
+    # Fetch MyCrew instance from DB
+    crew_instance = load_crew_by_name(selected_crew)
+
+    if not crew_instance:
+        raise HTTPException(status_code=404, detail=f"Crew '{selected_crew}' not found")
+
     try:
-        result = selected_crew.kickoff()
+        # Convert MyCrew to Crew and run it
+        crew_ai_instance = crew_instance.get_crewai_crew()  
+        result = crew_ai_instance.kickoff()
+        print(f"Execution result: {result}")
     except Exception as e:
-        raise HTTPException(status_code = 500,
-                            detail = f"Error running Crew: {str(e)}")
-    
+        import traceback
+        error_details = traceback.format_exc()
+        print(f"Error running crew: {error_details}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error running Crew: {str(e)}"
+        )
+
     return {
-        "message": f"Crew '{crew_name}' executed successfully.",
-        "execution_result":result
+        "message": f"Crew '{selected_crew}' executed successfully.",
+        "execution_result": result
     }
+
 
 @router.post("/stop_crew")
 def api_stop_crew():

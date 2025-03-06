@@ -9,7 +9,7 @@ source "$SCRIPT_DIR/venv/Scripts/activate"
 cd "$SCRIPT_DIR"
 
 # streamlit run app/app.py --server.headless True --server.port 4200
-uvicorn app.app:app --host 127.0.0.1 --port 8000 --reload
+uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
 
 
 

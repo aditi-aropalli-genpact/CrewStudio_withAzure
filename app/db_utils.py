@@ -1,7 +1,7 @@
 import sqlite3
 import os
 import json
-from src.my_tools import TOOL_CLASSES
+from app.my_tools import TOOL_CLASSES
 from sqlalchemy import create_engine, text
 
 user_id ='user'
@@ -379,7 +379,7 @@ def delete_result(result_id):
     delete_entity('result', result_id)
 
 def load_crew_by_name(crew_name):
-    from my_crew import MyCrew
+    from app.my_crew import MyCrew
 
     query = text('SELECT id, data FROM entities WHERE entity_type = :etype AND data LIKE :crew_name')
     params = {"etype": "crew", "crew_name": f'%"{crew_name}"%'}
@@ -393,8 +393,8 @@ def load_crew_by_name(crew_name):
 
     data = json.loads(row["data"])
 
-    agents_dict = {agent.id: agent for agent in load_agents()}
-    tasks_dict = {task.id: task for task in load_tasks()}
+    agents_dict = {agent.id: agent for agent in load_agents(user_id)}
+    tasks_dict = {task.id: task for task in load_tasks(user_id)}
 
     crew = MyCrew(
         id=row["id"],
