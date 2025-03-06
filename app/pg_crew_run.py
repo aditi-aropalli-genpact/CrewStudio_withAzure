@@ -7,7 +7,7 @@ import os
 import threading
 import ctypes
 from  app.console_capture import ConsoleCapture
-from app.db_utils import load_results, save_result
+from app.db_utils import load_results, save_result, load_crew_by_name
 from app.utils import format_result, generate_printable_view, rnd_id
 
 router = APIRouter()
@@ -153,12 +153,20 @@ class PageCrewRun:
 crew_run = PageCrewRun()
 
 @router.post("/run_crew")
-def api_run_crew(crew_name: str, background_tasks: BackgroundTasks):
-    selected_crew = crew_run.get_mycrew_by_name(crew_name)
+def api_run_crew(crew_name: str):
+    selected_crew = load_crew_by_name(crew_name)
     if not selected_crew:
         raise HTTPException(status_code=404, detail="Crew not found")
-    background_tasks.add_task(crew_run.control_buttons, selected_crew)
-    return {"message": "Crew execution started."}
+    try:
+        result = selected_crew.kickoff()
+    except Exception as e:
+        raise HTTPException(status_code = 500,
+                            detail = f"Error running Crew: {str(e)}")
+    
+    return {
+        "message": f"Crew '{crew_name}' executed successfully.",
+        "execution_result":result
+    }
 
 @router.post("/stop_crew")
 def api_stop_crew():

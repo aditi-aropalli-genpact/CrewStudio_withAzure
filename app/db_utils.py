@@ -1,7 +1,7 @@
 import sqlite3
 import os
 import json
-from app.my_tools import TOOL_CLASSES
+from src.my_tools import TOOL_CLASSES
 from sqlalchemy import create_engine, text
 
 user_id ='user'
@@ -377,3 +377,40 @@ def load_results():
 def delete_result(result_id):
     """Delete a result from the database."""
     delete_entity('result', result_id)
+
+def load_crew_by_name(crew_name):
+    from my_crew import MyCrew
+
+    query = text('SELECT id, data FROM entities WHERE entity_type = :etype AND data LIKE :crew_name')
+    params = {"etype": "crew", "crew_name": f'%"{crew_name}"%'}
+
+    with get_db_connection() as conn:
+        result = conn.execute(query, params)
+        row = result.mappings().first()
+
+    if not row:
+        return None  # Crew not found
+
+    data = json.loads(row["data"])
+
+    agents_dict = {agent.id: agent for agent in load_agents()}
+    tasks_dict = {task.id: task for task in load_tasks()}
+
+    crew = MyCrew(
+        id=row["id"],
+        name=data['name'],
+        process=data['process'],
+        verbose=data['verbose'],
+        created_at=data['created_at'],
+        memory=data.get('memory'),
+        cache=data.get('cache'),
+        planning=data.get('planning'),
+        max_rpm=data.get('max_rpm'),
+        manager_llm=data.get('manager_llm'),
+        manager_agent=agents_dict.get(data.get('manager_agent_id'))
+    )
+
+    crew.agents = [agents_dict[agent_id] for agent_id in data['agent_ids'] if agent_id in agents_dict]
+    crew.tasks = [tasks_dict[task_id] for task_id in data['task_ids'] if task_id in tasks_dict]
+
+    return crew
