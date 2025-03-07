@@ -4,10 +4,33 @@ from streamlit import markdown
 import markdown as md
 from datetime import datetime
 
+
+import hashlib  
+
+  
+def generate_agent_id(user_id):  
+    random_str = ''.join(random.choices(string.ascii_letters + string.digits, k=8))  
+    raw_id = f"{user_id}_{random_str}"  
+    agent_id_hash = hashlib.sha256(raw_id.encode()).hexdigest()  
+    agent_id = 'A_' + agent_id_hash[:16]  
+    return agent_id  
+
+
+  
+def generate_task_id(user_id):  
+    random_str = ''.join(random.choices(string.ascii_letters + string.digits, k=8))  
+    raw_id = f"{user_id}_task_{random_str}"  
+    task_id_hash = hashlib.sha256(raw_id.encode()).hexdigest()  
+    task_id = 'T_' + task_id_hash[:16]  
+    return task_id   
+
 def rnd_id(length=8):
     characters = string.ascii_letters + string.digits
     random_text = ''.join(random.choice(characters) for _ in range(length))
     return random_text
+
+
+
 
 def escape_quotes(s):
     return s.replace('"', '\\"').replace("'", "\\'")
