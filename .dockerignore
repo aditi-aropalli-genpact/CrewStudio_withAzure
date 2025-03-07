@@ -6,4 +6,5 @@
 .github
 .gitattributes
 .env_example
+.env
 Dockerfile

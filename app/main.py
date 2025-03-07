@@ -43,13 +43,17 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 app = FastAPI(lifespan=lifespan)
 
 app.include_router(my_agent.router, #
-                #    dependencies=[Depends(verify_token)]
+                   dependencies=[Depends(verify_token)]
                 )
 app.include_router(pg_crew_run.router, 
-                #    dependencies = [Depends(verify_token)]
+                   dependencies = [Depends(verify_token)]
                    )
-app.include_router(my_crew.router)
-app.include_router(my_task.router)
+app.include_router(my_crew.router,
+                   dependencies=[Depends(verify_token)]
+                   )
+app.include_router(my_task.router,
+                   dependencies=[Depends(verify_token)]
+                   )
 
 
 
