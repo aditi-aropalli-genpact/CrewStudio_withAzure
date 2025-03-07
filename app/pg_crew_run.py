@@ -157,58 +157,49 @@ from pydantic import BaseModel
 class RunCrewRequest(BaseModel):
     crew_name: str
 
-
-@router.post("/run_crew")
-def api_run_crew(request: RunCrewRequest):
-    selected_crew = request.crew_name
-
-    # Fetch MyCrew instance from DB
-    crew_instance = load_crew_by_name(selected_crew)
-
-    if not crew_instance:
-        raise HTTPException(status_code=404, detail=f"Crew '{selected_crew}' not found")
-
-    try:
-        # Convert MyCrew to Crew and run it
-        crew_ai_instance = crew_instance.get_crewai_crew()  
-        result = crew_ai_instance.kickoff()
-        print(f"Execution result: {result}")
-    except Exception as e:
-        import traceback
-        error_details = traceback.format_exc()
-        print(f"Error running crew: {error_details}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Error running Crew: {str(e)}"
-        )
-
-    return {
-        "message": f"Crew '{selected_crew}' executed successfully.",
-        "execution_result": result
-    }
+# @router.post("/run_crew")
+# def api_run_crew(crew_name: str):
+#     selected_crew = load_crew_by_name(crew_name, 'user')
+#     if not selected_crew:
+#         raise HTTPException(status_code=404, detail="Crew not found")
+    
+#     try:
+#         crew_ai_object = selected_crew.get_crewai_crew()  # Get actual CrewAI crew
+#         if not hasattr(crew_ai_object, "kickoff"):
+#             raise HTTPException(status_code=500, detail="CrewAI crew has no kickoff method")
+        
+#         result = crew_ai_object.kickoff(inputs = "This is a test")  # Run it
+#     except Exception as e:
+#         raise HTTPException(status_code=500, detail=f"Error running Crew: {str(e)}")
+    
+#     return {
+#         "message": f"Crew '{crew_name}' executed successfully.",
+#         "execution_result": result
+#     }
 
 
-@router.post("/stop_crew")
-def api_stop_crew():
-    if not crew_run.session_state['running']:
-        raise HTTPException(status_code=400, detail="No crew is currently running.")
-    crew_run.force_stop_thread(crew_run.session_state['crew_thread'])
-    crew_run.session_state['running'] = False
-    crew_run.session_state['crew_thread'] = None
-    return {"message": "Crew execution stopped."}
 
-@router.get("/get_result")
-def api_get_result():
-    result = crew_run.get_result()
-    if result is None:
-        raise HTTPException(status_code=404, detail="No result available yet.")
-    return {"result": result}
+# @router.post("/stop_crew")
+# def api_stop_crew():
+#     if not crew_run.session_state['running']:
+#         raise HTTPException(status_code=400, detail="No crew is currently running.")
+#     crew_run.force_stop_thread(crew_run.session_state['crew_thread'])
+#     crew_run.session_state['running'] = False
+#     crew_run.session_state['crew_thread'] = None
+#     return {"message": "Crew execution stopped."}
 
-@router.post("/clear_console")
-def api_clear_console():
-    crew_run.clear_console()
-    return {"message": "Console cleared."}
+# @router.get("/get_result")
+# def api_get_result():
+#     result = crew_run.get_result()
+#     if result is None:
+#         raise HTTPException(status_code=404, detail="No result available yet.")
+#     return {"result": result}
 
-@router.get("/list_crews")
-def api_list_crews():
-    return {"crews": crew_run.list_available_crews()}
+# @router.post("/clear_console")
+# def api_clear_console():
+#     crew_run.clear_console()
+#     return {"message": "Console cleared."}
+
+# @router.get("/list_crews")
+# def api_list_crews():
+#     return {"crews": crew_run.list_available_crews()}

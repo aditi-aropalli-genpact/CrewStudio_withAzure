@@ -3,6 +3,7 @@ import os
 import json
 from app.my_tools import TOOL_CLASSES
 from sqlalchemy import create_engine, text
+from app.my_crew import MyCrew
 
 user_id ='user'
 # "user" "Test1"
@@ -114,6 +115,42 @@ def load_entities(entity_type, user_id=None, view_mode="mine"):
 
     return [(row["id"], json.loads(row["data"]), row["user_id"]) for row in rows]
 
+# def load_entities_list(entity_type, user_id, view_mode):
+
+def load_entity(id):
+    """
+    Load entities from the database based on view_mode.
+    
+    :param entity_type: Type of entity (e.g., 'agent', 'task', etc.).
+    :param user_id: The current user ID.
+    :param view_mode: "mine" to load only user-created entities, 
+                      "published" to load published entities from other users.
+    :return: List of tuples (id, data, creator_id).
+    """
+    query = text('SELECT id, data, user_id FROM entities WHERE id = :id')
+    params = {"id": id}
+
+    # if user_id:
+    #     if view_mode == "mine":
+    #         # Load only entities created by the user
+    #         query = text('''
+    #             SELECT id, data, user_id FROM entities 
+    #             WHERE entity_type = :etype AND user_id = :user_id
+    #         ''')
+    #         params["user_id"] = user_id
+    #     elif view_mode == "published":
+    #         # Load only published entities that belong to OTHER users
+    #         query = text('''
+    #             SELECT id, data, user_id FROM entities 
+    #             WHERE entity_type = :etype AND published = TRUE AND user_id != :user_id
+    #         ''')
+    #         params["user_id"] = user_id  # Ensure the user sees only others' published entities
+
+    with get_db_connection() as conn:
+        result = conn.execute(query, params)
+        rows = result.mappings().all()
+
+    return [(row["id"], json.loads(row["data"]), row["user_id"]) for row in rows]
 
 def delete_entity(entity_type, entity_id):
     delete_sql = text('''
@@ -378,11 +415,16 @@ def delete_result(result_id):
     """Delete a result from the database."""
     delete_entity('result', result_id)
 
-def load_crew_by_name(crew_name):
-    from app.my_crew import MyCrew
+def load_crew_by_name(crew_name: str, user_id: str):
+    """Load a crew by its name from the database."""
+    
+    query = text("""
+        SELECT id, data FROM entities 
+        WHERE entity_type = :etype 
+        AND json_extract(data, '$.name') LIKE :crew_name
+    """)
 
-    query = text('SELECT id, data FROM entities WHERE entity_type = :etype AND data LIKE :crew_name')
-    params = {"etype": "crew", "crew_name": f'%"{crew_name}"%'}
+    params = {"etype": "crew", "crew_name": f"%{crew_name}%"}  # Fixed LIKE search
 
     with get_db_connection() as conn:
         result = conn.execute(query, params)
@@ -391,26 +433,29 @@ def load_crew_by_name(crew_name):
     if not row:
         return None  # Crew not found
 
-    data = json.loads(row["data"])
+    data = json.loads(row["data"])  # Parse JSON data
 
+    # Load related agents and tasks
     agents_dict = {agent.id: agent for agent in load_agents(user_id)}
     tasks_dict = {task.id: task for task in load_tasks(user_id)}
 
+    # Create MyCrew instance
     crew = MyCrew(
         id=row["id"],
-        name=data['name'],
-        process=data['process'],
-        verbose=data['verbose'],
-        created_at=data['created_at'],
-        memory=data.get('memory'),
-        cache=data.get('cache'),
-        planning=data.get('planning'),
-        max_rpm=data.get('max_rpm'),
-        manager_llm=data.get('manager_llm'),
-        manager_agent=agents_dict.get(data.get('manager_agent_id'))
+        name=data.get("name"),
+        process=data.get("process", "sequential"),  # Default to 'sequential' if missing
+        verbose=data.get("verbose", False),
+        created_at=data.get("created_at"),
+        memory=data.get("memory", False),
+        cache=data.get("cache", True),
+        planning=data.get("planning", False),
+        max_rpm=data.get("max_rpm", 1000),
+        manager_llm=data.get("manager_llm"),
+        manager_agent=agents_dict.get(data.get("manager_agent_id")),
     )
 
-    crew.agents = [agents_dict[agent_id] for agent_id in data['agent_ids'] if agent_id in agents_dict]
-    crew.tasks = [tasks_dict[task_id] for task_id in data['task_ids'] if task_id in tasks_dict]
+    # Assign agents and tasks
+    crew.agents = [agents_dict[agent_id] for agent_id in data.get("agent_ids", []) if agent_id in agents_dict]
+    crew.tasks = [tasks_dict[task_id] for task_id in data.get("task_ids", []) if task_id in tasks_dict]
 
     return crew
