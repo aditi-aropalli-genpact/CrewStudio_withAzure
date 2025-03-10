@@ -4,6 +4,7 @@ import json
 from app.my_tools import TOOL_CLASSES
 from sqlalchemy import create_engine, text
 from app.my_crew import MyCrew
+from typing import Optional
 
 user_id ='user'
 # "user" "Test1"
@@ -130,21 +131,6 @@ def load_entity(id):
     query = text('SELECT id, data, user_id FROM entities WHERE id = :id')
     params = {"id": id}
 
-    # if user_id:
-    #     if view_mode == "mine":
-    #         # Load only entities created by the user
-    #         query = text('''
-    #             SELECT id, data, user_id FROM entities 
-    #             WHERE entity_type = :etype AND user_id = :user_id
-    #         ''')
-    #         params["user_id"] = user_id
-    #     elif view_mode == "published":
-    #         # Load only published entities that belong to OTHER users
-    #         query = text('''
-    #             SELECT id, data, user_id FROM entities 
-    #             WHERE entity_type = :etype AND published = TRUE AND user_id != :user_id
-    #         ''')
-    #         params["user_id"] = user_id  # Ensure the user sees only others' published entities
 
     with get_db_connection() as conn:
         result = conn.execute(query, params)
@@ -229,7 +215,7 @@ def load_agents(user_id, view_mode="mine"):
 def delete_agent(agent_id):
     delete_entity('agent', agent_id)
 
-def publish_agent(agent_id,user_id):
+def publish_agent(agent_id):
     publish_entity('agent', agent_id, user_id)
 
 def save_task(task):
@@ -242,30 +228,25 @@ def save_task(task):
         'context_from_sync_tasks_ids': task.context_from_sync_tasks_ids,
         'created_at': task.created_at
     }
-    # Use task's agent's creator_id if agent exists, else use a default  
-    user_id = task.agent.creator_id if task.agent else 'unknown_user'  
-    save_entity('task', task.id, data, user_id=user_id)  
+    save_entity('task', task.id, data, user_id)
 
-
-def load_tasks(user_id, view_mode="mine"):  
-    from app.my_task import MyTask  
-    rows = load_entities('task', user_id=user_id, view_mode=view_mode)  
-    agents = load_agents(user_id)  
-    agents_dict = {agent.id: agent for agent in agents}  
-    tasks = []  
-    for row in rows:  
-        task_id, data, creator_id = row  
-        agent_id = data.pop('agent_id', None)  
-        agent = agents_dict.get(agent_id)  
-        task = MyTask(id=task_id, agent=agent, user_id=creator_id, **data)  
-        tasks.append(task)  
-    return sorted(tasks, key=lambda x: x.created_at) 
+def load_tasks(user_id):
+    from app.my_task import MyTask
+    rows = load_entities('task', user_id)
+    agents_dict = {agent.id: agent for agent in load_agents(user_id)}
+    tasks = []
+    for row in rows:
+        data = row[1]
+        agent_id = data.pop('agent_id', None)
+        task = MyTask(id=row[0], agent=agents_dict.get(agent_id), **data)
+        tasks.append(task)
+    return sorted(tasks, key=lambda x: x.created_at)
 
 def delete_task(task_id):
     delete_entity('task', task_id)
 
-def publish_task(task_id, user_id):  
-    publish_entity('task', task_id, user_id)  
+def publish_task(task_id):
+    publish_entity('task', task_id, user_id)
 
 def save_crew(crew):
     data = {
@@ -286,12 +267,28 @@ def save_crew(crew):
 
 def load_crews(user_id):
     from app.my_crew import MyCrew
+
     rows = load_entities('crew', user_id)
     agents_dict = {agent.id: agent for agent in load_agents(user_id)}
     tasks_dict = {task.id: task for task in load_tasks(user_id)}
     crews = []
+
     for row in rows:
         data = row[1]
+
+        # Debugging prints
+        print(f"\nDEBUG: Crew ID {row[0]}")
+        print("DEBUG: Raw Data:", data)
+
+        if not isinstance(data, dict):
+            print(f"ERROR: Data is not a dictionary for crew {row[0]}! Type: {type(data)}")
+            continue  # Skip problematic rows
+        
+        if 'agent_ids' not in data:
+            print(f"ERROR: 'agent_ids' missing in data for crew {row[0]}")
+            print("Full data:", data)  # Print full data for reference
+            continue  # Skip problematic row to avoid KeyError
+        
         crew = MyCrew(
             id=row[0], 
             name=data['name'], 
@@ -305,9 +302,12 @@ def load_crews(user_id):
             manager_llm=data.get('manager_llm'),
             manager_agent=agents_dict.get(data.get('manager_agent_id'))
         )
+
         crew.agents = [agents_dict[agent_id] for agent_id in data['agent_ids'] if agent_id in agents_dict]
         crew.tasks = [tasks_dict[task_id] for task_id in data['task_ids'] if task_id in tasks_dict]
+
         crews.append(crew)
+
     return sorted(crews, key=lambda x: x.created_at)
 
 def delete_crew(crew_id):
@@ -420,47 +420,9 @@ def delete_result(result_id):
     """Delete a result from the database."""
     delete_entity('result', result_id)
 
-def load_crew_by_name(crew_name: str, user_id: str):
-    """Load a crew by its name from the database."""
-    
-    query = text("""
-        SELECT id, data FROM entities 
-        WHERE entity_type = :etype 
-        AND json_extract(data, '$.name') LIKE :crew_name
-    """)
-
-    params = {"etype": "crew", "crew_name": f"%{crew_name}%"}  # Fixed LIKE search
-
-    with get_db_connection() as conn:
-        result = conn.execute(query, params)
-        row = result.mappings().first()
-
-    if not row:
-        return None  # Crew not found
-
-    data = json.loads(row["data"])  # Parse JSON data
-
-    # Load related agents and tasks
-    agents_dict = {agent.id: agent for agent in load_agents(user_id)}
-    tasks_dict = {task.id: task for task in load_tasks(user_id)}
-
-    # Create MyCrew instance
-    crew = MyCrew(
-        id=row["id"],
-        name=data.get("name"),
-        process=data.get("process", "sequential"),  # Default to 'sequential' if missing
-        verbose=data.get("verbose", False),
-        created_at=data.get("created_at"),
-        memory=data.get("memory", False),
-        cache=data.get("cache", True),
-        planning=data.get("planning", False),
-        max_rpm=data.get("max_rpm", 1000),
-        manager_llm=data.get("manager_llm"),
-        manager_agent=agents_dict.get(data.get("manager_agent_id")),
-    )
-
-    # Assign agents and tasks
-    crew.agents = [agents_dict[agent_id] for agent_id in data.get("agent_ids", []) if agent_id in agents_dict]
-    crew.tasks = [tasks_dict[task_id] for task_id in data.get("task_ids", []) if task_id in tasks_dict]
-
-    return crew
+def load_crew_by_name(crew_name: str, user_id: str) -> Optional[MyCrew]:
+    crews = load_crews(user_id)
+    for crew in crews:
+        if crew.name == crew_name:
+            return crew
+    return None

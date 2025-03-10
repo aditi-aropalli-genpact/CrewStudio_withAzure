@@ -22,19 +22,19 @@ class MyCrew:
         self.planning = planning if planning is not None else False
         self.created_at = created_at or datetime.now().isoformat()
         self.edit_key = f'edit_{self.id}'
-        if self.edit_key not in ss:
-            ss[self.edit_key] = False
+        # if self.edit_key not in ss:
+        #     ss[self.edit_key] = False
         self.tasks_order_key = f'tasks_order_{self.id}'
-        if self.tasks_order_key not in ss:
-            ss[self.tasks_order_key] = [task.id for task in self.tasks]
+        # if self.tasks_order_key not in ss:
+        #     ss[self.tasks_order_key] = [task.id for task in self.tasks]
 
-    @property
-    def edit(self):
-        return ss[self.edit_key]
+    # @property
+    # def edit(self):
+    #     return ss[self.edit_key]
 
-    @edit.setter
-    def edit(self, value):
-        ss[self.edit_key] = value
+    # @edit.setter
+    # def edit(self, value):
+    #     ss[self.edit_key] = value
 
     def get_crewai_crew(self, *args, **kwargs) -> Crew:
         crewai_agents = [agent.get_crewai_agent() for agent in self.agents]
@@ -314,30 +314,9 @@ async def create_crew(crew_data: CrewCreate):
     return {'id': crew_id}
 
 # Endpoint to delete a crew
-@router.delete('/api/crews/delete/{crew_name}')
-async def delete_crew(crew_name: str):
-    user_id = 'user'  # Replace with actual authentication logic
-
-    if not user_id:
-        raise HTTPException(status_code=401, detail="User ID not found in token")
-
-    # Load all crews for the user
-    crews = db_utils.load_crews(user_id)
-
-    # Find the crew with the matching name
-    crew_to_delete = next((crew for crew in crews if crew["name"] == crew_name), None)
-
-    if not crew_to_delete:
-        raise HTTPException(status_code=404, detail=f'Crew "{crew_name}" not found')
-
-    # Extract the ID of the crew to delete
-    crew_id = crew_to_delete["id"]
-
-    # Delete the entity using its ID
-    db_utils.delete_entity('crew', crew_id)
-
-    return {'detail': f'Crew "{crew_name}" deleted successfully'}
-
+@router.delete('/api/crews/delete/{crew_id}')
+async def delete_crew(crew_id: str):
+    db_utils.delete_crew(crew_id)
 
 # Pydantic model for updating a crew
 class CrewUpdate(BaseModel):
@@ -353,33 +332,37 @@ class CrewUpdate(BaseModel):
     manager_llm: Optional[str] = None
     manager_agent_id: Optional[str] = None
 
+# Endpoint to edit a crew
+@router.put('/api/crews/{crew_id}/edit')
+async def edit_crew(crew_id: str, crew_data: CrewUpdate):
+    user_id = 'user'  # Replace with actual authentication logic
 
-router = APIRouter()
-  # Replace with actual authentication logic
+    if not user_id:
+        raise HTTPException(status_code=401, detail="User ID not found in token")
 
-@router.put("/api/crews/update-tasks")
-async def update_tasks(crew_id, task_ids, user_id):
-    # Load crew from database
-    crew_data = db_utils.load_crews(crew_id, user_id)
+    # Load all crews for the user
+    crews = db_utils.load_crews(user_id)
 
-    if not crew_data:
-        raise HTTPException(status_code=404, detail="Crew not found")
+    # Find the crew by ID
+    crew_to_edit = next((crew for crew in crews if crew["id"] == crew_id), None)
 
-    # Convert crew_data into a MyCrew instance
-    crew = MyCrew(**crew_data)  
+    if not crew_to_edit:
+        raise HTTPException(status_code=404, detail=f'Crew with ID "{crew_id}" not found')
 
-    # Call the existing update_tasks method
-    crew.update_tasks(task_ids, user_id)
+    # Update only the fields that are provided
+    update_fields = crew_data.dict(exclude_unset=True)
+
+    for field, value in update_fields.items():
+        crew_to_edit[field] = value  # Update dictionary directly
 
     # Save the updated crew
-    db_utils.save_crew(crew)
+    db_utils.save_entity('crew', crew_id, crew_to_edit, user_id)
 
-    return {"detail": "Crew tasks updated successfully", "task_ids": [task.id for task in crew.task_ids]}
-
+    return {'detail': f'Crew "{crew_to_edit["name"]}" updated successfully'}
 
 
 
 # Endpoint to list all crews
 @router.get('/api/crews/list')
 async def get_crews_list(user_id: str, view_mode: Optional[str] = None):
-    return db_utils.load_crews(user_id, view_mode)
+    return db_utils.load_crews(user_id)

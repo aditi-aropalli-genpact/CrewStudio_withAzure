@@ -5,6 +5,8 @@ SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 
 # Activate the virtual environment
 source "$SCRIPT_DIR/venv/Scripts/activate"
+#in case of WSL
+# source "$SCRIPT_DIR/venv/bin/activate"
 
 cd "$SCRIPT_DIR"
 
