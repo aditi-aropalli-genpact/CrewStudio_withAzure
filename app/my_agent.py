@@ -133,25 +133,25 @@ router = APIRouter()
 from pydantic import BaseModel
 from typing import List
 class AgentCreate(BaseModel):  
-    role: str  
-    backstory: str  
-    goal: str  
+    role: str = "Senior Researcher"
+    backstory: str = "Driven by curiosity, you're at the forefront of innovation, eager to explore and share knowledge that could change the world."
+    goal: str  = "Uncover groundbreaking technologies in AI"
     temperature: float = 0.1  
     allow_delegation: bool = False  
     verbose: bool = True  
     cache: bool = True  
-    llm_provider_model: str  
+    llm_provider_model: str ="AzureOpenAI: azure/gpt-4o-mini" 
     max_iter: int = 25  
     tool_ids: List[str] = []  
-  
+
 @router.post('/api/agents/create')  
 async def create_agent(  
     agent_data: AgentCreate,  
-    # token_payload: dict = Depends(verify_token)  
+    token_payload: dict = Depends(verify_token)  
 ):  
     # Extract user_id from 'OHR' field in the token payload  
-    # user_id = token_payload.get('OHR')  
-    user_id = 'user'
+    user_id = token_payload.get('OHR')  
+
     if not user_id:  
         raise HTTPException(status_code=401, detail='User ID not found in token')  
   
@@ -199,11 +199,11 @@ async def create_agent(
 @router.delete('/api/agents/{agent_id}/delete')  
 async def delete_agent(  
     agent_id: str,  
-    # token_payload: dict = Depends(verify_token)  
+    token_payload: dict = Depends(verify_token)  
 ):  
     # Extract user_id from 'OHR' field in the token payload  
-    # user_id = token_payload.get('OHR')  
-    user_id = 'user'
+    user_id = token_payload.get('OHR')  
+   
     if not user_id:  
         raise HTTPException(status_code=401, detail='User ID not found in token')  
   
@@ -236,11 +236,11 @@ class AgentUpdate(BaseModel):
 async def edit_agent(  
     agent_id: str,  
     agent_data: AgentUpdate,  
-    # token_payload: dict = Depends(verify_token)  
+    token_payload: dict = Depends(verify_token)  
 ):  
     # Extract user_id from 'OHR' field in the token payload  
-    # user_id = token_payload.get('OHR') 
-    user_id = 'user' 
+    user_id = token_payload.get('OHR') 
+
     if not user_id:  
         raise HTTPException(status_code=401, detail='User ID not found in token')  
   
@@ -280,11 +280,11 @@ async def edit_agent(
 @router.patch('/api/agents/{agent_id}/publish')  
 async def publish_agent(  
     agent_id: str,  
-    # token_payload: dict = Depends(verify_token)  
+    token_payload: dict = Depends(verify_token)  
 ):  
     # Extract user_id from 'OHR' field in the token payload  
-    # user_id = token_payload.get('OHR')  
-    user_id = 'user'
+    user_id = token_payload.get('OHR')  
+
     if not user_id:  
         raise HTTPException(status_code=401, detail='User ID not found in token')  
   
@@ -299,6 +299,11 @@ async def publish_agent(
     db_utils.publish_agent(agent_id, user_id)  
     return {'detail': 'Agent published successfully'}  
 
-@router.get('api/agents/list')
-async def get_agents_list(user_id, view_mode):
+@router.get('/api/agents/list')
+async def get_agents_list( view_mode, token_payload: dict = Depends(verify_token)):
+    # Extract user_id from 'OHR' field in the token payload  
+    user_id = token_payload.get('OHR')  
+
+    if not user_id:  
+        raise HTTPException(status_code=401, detail='User ID not found in token')  
     return db_utils.load_agents(user_id, view_mode)

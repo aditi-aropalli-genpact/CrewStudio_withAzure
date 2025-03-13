@@ -6,20 +6,15 @@ from sqlalchemy import create_engine, text
 from app.my_crew import MyCrew
 from typing import Optional
 
-user_id ='user'
-# "user" "Test1"
-# user_id = 'Test1'
+from dotenv import load_dotenv,find_dotenv
+ 
+dotenv_path = os.path.join(os.path.dirname(__file__), '../', '.env')
+print(f".env file loaded from: {dotenv_path}")
+load_dotenv(dotenv_path)
 
-# If you have an environment variable DB_URL for Postgres, use that. 
-# Otherwise, fallback to local SQLite file: 'sqlite:///crewai.db'
-# DEFAULT_SQLITE_URL = 'sqlite:///crewai.db'
-DEFAULT_SQLITE_URL = 'sqlite:///crewai2.db'
-DB_URL = os.getenv('DB_URL', DEFAULT_SQLITE_URL)
+DB_URL = os.getenv('DB_URL')
+print("Databse connect URL",DB_URL)
 
-# Create a SQLAlchemy Engine.
-# For example, DB_URL could be:
-#   "postgresql://username:password@hostname:5432/dbname"
-# or fallback to: "sqlite:///crewai.db"
 engine = create_engine(DB_URL, echo=False)
 
 def get_db_connection():
@@ -157,7 +152,7 @@ def publish_entity(entity_type, entity_id, user_id):
         conn.execute(update_sql, {"id": entity_id, "etype": entity_type, "user_id": user_id})
         conn.commit()
 
-def save_tools_state(enabled_tools):
+def save_tools_state(enabled_tools,user_id):
     data = {
         'enabled_tools': enabled_tools
     }
@@ -171,7 +166,7 @@ def save_tools_state(enabled_tools):
 
 #     save_entity('tools_state', 'enabled_tools', data, user_id)
 
-def load_tools_state():
+def load_tools_state(user_id):
     rows = load_entities('tools_state', user_id)
     if rows:
         return rows[0][1].get('enabled_tools', {})
@@ -212,13 +207,23 @@ def load_agents(user_id, view_mode="mine"):
 
     return sorted(agents, key=lambda x: x.created_at)
 
+
+def load_agent_by_id(agent_id: str, user_id: str):
+    user_id = 'test'
+    agents = load_agents(user_id)  # Get the list of agents
+    for agent in agents:  # Iterate over each agent
+        if agent.id == agent_id:  # Use `agent.id` (or whatever the correct attribute is)
+            return agent
+    return None  # Return None if no match is found
+
+
 def delete_agent(agent_id):
     delete_entity('agent', agent_id)
 
-def publish_agent(agent_id):
+def publish_agent(agent_id,user_id):
     publish_entity('agent', agent_id, user_id)
 
-def save_task(task):
+def save_task(task,user_id):
     data = {
         'description': task.description,
         'expected_output': task.expected_output,
@@ -245,10 +250,10 @@ def load_tasks(user_id):
 def delete_task(task_id):
     delete_entity('task', task_id)
 
-def publish_task(task_id):
+def publish_task(task_id,user_id):
     publish_entity('task', task_id, user_id)
 
-def save_crew(crew):
+def save_crew(crew,user_id):
     data = {
         'name': crew.name,
         'process': crew.process,
@@ -313,10 +318,10 @@ def load_crews(user_id):
 def delete_crew(crew_id):
     delete_entity('crew', crew_id)
 
-def publish_crew(crew_id):
+def publish_crew(crew_id,user_id):
     publish_entity('crew', crew_id, user_id)
 
-def save_tool(tool):
+def save_tool(tool,user_id):
     data = {
         'name': tool.name,
         'description': tool.description,
@@ -386,7 +391,7 @@ def import_from_json(file_path):
             
         conn.commit()
         
-def save_result(result):
+def save_result(result,user_id):
     """Save a result to the database."""
     data = {
         'crew_id': result.crew_id,
@@ -397,7 +402,7 @@ def save_result(result):
     }
     save_entity('result', result.id, data, user_id)
 
-def load_results():
+def load_results(user_id):
     """Load all results from the database."""
     from app.result import Result
     rows = load_entities('result', user_id)

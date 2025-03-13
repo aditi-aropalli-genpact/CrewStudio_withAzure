@@ -5,7 +5,8 @@ from streamlit import session_state as ss
 from datetime import datetime
 from app.llms import llm_providers_and_models, create_llm
 from app import db_utils
-
+from fastapi import APIRouter, Depends, HTTPException
+from app.okta_auth import verify_token
 class MyCrew:
     def __init__(self, id=None, name=None, agents=None, tasks=None, process=None, cache=None,max_rpm=None, verbose=None, manager_llm=None, manager_agent=None, created_at=None, memory=None, planning=None):
         self.id = id or "C_" + rnd_id()
@@ -37,8 +38,11 @@ class MyCrew:
     #     ss[self.edit_key] = value
 
     def get_crewai_crew(self, *args, **kwargs) -> Crew:
+        # get agents from agent id
+        print(self)
+        print(agent for agent in self.agents)
         crewai_agents = [agent.get_crewai_agent() for agent in self.agents]
-
+        print(f"DEBUG crewai_agents - {crewai_agents}")
         # Create a dictionary to hold the Task objects
         task_objects = {}
 
@@ -65,10 +69,12 @@ class MyCrew:
                 crewai_task = task.get_crewai_task()
 
             task_objects[task.id] = crewai_task
+            print(crewai_task)
             return crewai_task
 
         # Create all tasks, resolving dependencies recursively
         for task in self.tasks:
+            print(f"self.task [DEBUG line 76] = {task.agent}")
             create_task(task)
 
         # Collect the final list of tasks in the original order
@@ -272,24 +278,25 @@ router = APIRouter()
 
 # Pydantic model for creating a crew
 class CrewCreate(BaseModel):
-    name: str
-    process: str  # Assuming this is stored as a string (e.g., 'sequential' or 'hierarchical')
-    verbose: bool
+    name: str = "Crew 1"
+    process: str = "sequential" # Assuming this is stored as a string (e.g., 'sequential' or 'hierarchical')
+    verbose: bool = False
     agent_ids: List[str]
     task_ids: List[str]
-    memory: bool
-    cache: bool
-    planning: bool
-    max_rpm: int
+    memory: bool = False
+    cache: bool = False
+    planning: bool = False
+    max_rpm: int = 2
     manager_llm: Optional[str] = None
     manager_agent_id: Optional[str] = None
 
 @router.post('/api/crews/create')
-async def create_crew(crew_data: CrewCreate):
-    user_id = 'user'  # Replace with actual user authentication logic
+async def create_crew(crew_data: CrewCreate, token_payload: dict = Depends(verify_token)  ):
+    # Extract user_id from token payload  
+    user_id = token_payload.get('OHR') 
 
-    if not user_id:
-        raise HTTPException(status_code=401, detail="User ID not found in token")
+    if not user_id:  
+        raise HTTPException(status_code=401, detail='User ID not found in token')  
 
     crew_id = 'C_' + str(uuid4())[:8]
     created_at = datetime.now().isoformat()
@@ -315,7 +322,7 @@ async def create_crew(crew_data: CrewCreate):
 
 # Endpoint to delete a crew
 @router.delete('/api/crews/delete/{crew_id}')
-async def delete_crew(crew_id: str):
+async def delete_crew(crew_id: str,token_payload: dict = Depends(verify_token)):
     db_utils.delete_crew(crew_id)
 
 # Pydantic model for updating a crew
@@ -334,11 +341,12 @@ class CrewUpdate(BaseModel):
 
 # Endpoint to edit a crew
 @router.put('/api/crews/{crew_id}/edit')
-async def edit_crew(crew_id: str, crew_data: CrewUpdate):
-    user_id = 'user'  # Replace with actual authentication logic
+async def edit_crew(crew_id: str, crew_data: CrewUpdate,token_payload: dict = Depends(verify_token)):
+    # Extract user_id from token payload  
+    user_id = token_payload.get('OHR') 
 
-    if not user_id:
-        raise HTTPException(status_code=401, detail="User ID not found in token")
+    if not user_id:  
+        raise HTTPException(status_code=401, detail='User ID not found in token')  
 
     # Load all crews for the user
     crews = db_utils.load_crews(user_id)
@@ -364,5 +372,10 @@ async def edit_crew(crew_id: str, crew_data: CrewUpdate):
 
 # Endpoint to list all crews
 @router.get('/api/crews/list')
-async def get_crews_list(user_id: str, view_mode: Optional[str] = None):
+async def get_crews_list(view_mode: Optional[str] = None,token_payload: dict = Depends(verify_token)):
+        # Extract user_id from token payload  
+    user_id = token_payload.get('OHR') 
+
+    if not user_id:  
+        raise HTTPException(status_code=401, detail='User ID not found in token')  
     return db_utils.load_crews(user_id)

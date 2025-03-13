@@ -40,22 +40,17 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             print(f"Error initializing AgentOps: {str(e)}")
     yield  # Let FastAPI run the app
 
-app = FastAPI(lifespan=lifespan)
-
-app.include_router(my_agent.router, #
-                #    dependencies=[Depends(verify_token)]
-                )
-app.include_router(pg_crew_run.router, 
-                #    dependencies = [Depends(verify_token)]
-                   )
-app.include_router(my_crew.router,
-                #    dependencies=[Depends(verify_token)]
-                   )
-app.include_router(my_task.router,
-                #    dependencies=[Depends(verify_token)]
-                   )
+app = FastAPI(lifespan=lifespan, 
+              root_path = "/studio", 
+              dependencies= [Depends(verify_token)]
+              )
 
 
+# to test without okta 
+app.include_router(my_agent.router)
+app.include_router(pg_crew_run.router)
+app.include_router(my_crew.router)
+app.include_router(my_task.router)
 
 # CORS Configuration
 app.add_middleware(
@@ -90,14 +85,31 @@ def load_data(user_id, view_mode='published'): #mine
         "enabled_tools": db_utils.load_tools_state()
     }
 
-@app.get("/api/data")
-async def get_data(user_id):
+@app.get("/")
+async def Welcome():
+    return {"status": "Sucess", "message": "Welcome to studio backend"}
+
+@app.get("/studio/")
+async def Welcome_route():
+    return {"status": "Sucess", "message": "Welcome to crew AI studio backend"}
+
+@app.get("/studio/api/data")
+async def get_data(token_payload: dict = Depends(verify_token)):
+    user_id = token_payload.get('OHR')  
+
+    if not user_id:  
+        raise HTTPException(status_code=401, detail='User ID not found in token')  
     return load_data(user_id)
 
-@app.get("/api/{page}")
-async def get_page_data(page: str, user_id, view_mode,
-                        # token_payload: dict = Depends(verify_token)
+@app.get("/studio/api/{page}")
+async def get_page_data(page: str,view_mode,
+                        token_payload: dict = Depends(verify_token)
                         ):
+    user_id = token_payload.get('OHR')  
+
+    if not user_id:  
+        raise HTTPException(status_code=401, detail='User ID not found in token')  
     if page not in pages():
         return {"error": "Page not found"}
     return {"page": page, "data": load_data(user_id, view_mode)}
+
